@@ -1,0 +1,18 @@
+(library
+ (name marshal)
+ (public_name marshal)
+ (modules marshal))
+
+(library
+ (name marshal_json)
+ (public_name marshal-json)
+ (modules marshal_json)
+ (libraries marshal yojson)
+ (preprocess (pps ppx_marshal_ext)))
+
+(library
+ (name marshal_yaml)
+ (public_name marshal-yaml)
+ (modules marshal_yaml)
+ (libraries marshal yaml)
+ (preprocess (pps ppx_marshal_ext)))

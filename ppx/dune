@@ -1,0 +1,13 @@
+(library
+ (name ppx_marshal)
+ (public_name ppx_marshal)
+ (libraries ppxlib)
+ (modules ppx_marshal util)
+ (kind ppx_rewriter))
+
+(library
+ (name ppx_marshal_ext)
+ (public_name ppx_marshal_ext)
+ (libraries ppxlib)
+ (modules ppx_marshal_ext)
+ (kind ppx_rewriter))

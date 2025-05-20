@@ -1,0 +1,8 @@
+(rule
+ (alias runtest)
+ (action (run ./run_tests.exe)))
+
+(executable
+ (name run_tests)
+ (libraries alcotest marshal marshal-json marshal-yaml)
+ (preprocess (pps ppx_marshal)))
