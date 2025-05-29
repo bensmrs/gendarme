@@ -29,7 +29,7 @@ let rec expr_of_core_type = function
       List.map (fun arg -> (Nolabel, expr_of_core_type arg |> wrap ~loc)) tuple
       |> pexp_apply ~loc (evar ~loc tuplen) |> unwrap ~loc
   | { ptyp_desc = Ptyp_var _; ptyp_loc = loc; _ } ->
-      eerr_ma ~loc "cannot marshal type variables (yet)"
+      eerr_ma ~loc "cannot marshal type variables"
   | { ptyp_desc = Ptyp_arrow _; ptyp_loc = loc; _ } ->
       eerr_ma ~loc "cannot marshal function types"
   | { ptyp_desc = Ptyp_object _; ptyp_loc = loc; _ } ->
@@ -47,7 +47,7 @@ let rec expr_of_core_type = function
 (** Wrap function cases *)
 let wrap_cases ~loc cases =
   let rhs = apply ~loc (evar ~loc "raise") [construct_e ~loc "Unknown_field" []] in
-  case ~lhs:(ppat_any ~loc) ~guard:None ~rhs ::cases |> List.rev
+  case ~lhs:(ppat_any ~loc) ~guard ~rhs ::cases |> List.rev
 
 (** Open a module in an expression *)
 let open_module ~loc m =
@@ -78,7 +78,7 @@ let process_record_attrs ~safe field ty base_record =
           let m = "Marshal_" ^ attr in
           let cons_name = cap attr in
           let f_case = case ~lhs:(ppat_tuple ~loc [construct_p ~loc:attr_name.loc cons_name [];
-                                                   ppat_constant ~loc:cst_loc a_cst]) ~guard:None in
+                                                   ppat_constant ~loc:cst_loc a_cst]) ~guard in
           let get' = f_case ~rhs:(apply ~loc (dot ~loc m "pack")
             [apply_v ~loc (dot ~loc m "marshal") (pexp_field ~loc (evar ~loc "_%r") field_l) ty]) in
           let put' = f_case ~rhs:(pexp_record ~loc [(field_l, apply_v ~loc (dot ~loc m "unmarshal")
@@ -104,7 +104,7 @@ let process_record_attrs ~safe field ty base_record =
   process_record_attrs_rec
 
 (** Process record fields *)
-let process_record ~loc ~safe base_record fields =
+let process_record ~loc ~safe base_record =
   let rec process_record_rec (fds, get, put, def, records as acc) = function
     | [] -> acc
     | { pld_name; pld_type; pld_attributes = attrs; _ } as record::tl ->
@@ -114,9 +114,55 @@ let process_record ~loc ~safe base_record fields =
         let pld_attributes = List.rev attrs in
         let def' = match def_v with
           | Some d -> (lident_t' pld_name, d)
-          | None -> (lident_t' pld_name, apply ~loc:pld_type.ptyp_loc (evar ~loc "default") [ty]) in
+          | None -> (lident_t' pld_name, apply ~loc:pld_type.ptyp_loc (evar ~loc "default") [ty]
+                     |> unwrap ~loc) in
         process_record_rec (fds, get, put, def'::def, { record with pld_attributes }::records) tl in
-  process_record_rec (construct_e ~loc "[]" [], [], [], [], []) fields
+  process_record_rec (construct_e ~loc "[]" [], [], [], [], [])
+
+(** Process variant type constructors *)
+let process_variant ctors =
+  let rec process_variant_rec (get, put as acc) = function
+    | [] -> acc
+    | { pcd_name; pcd_args; pcd_loc = loc; _ }::tl ->
+        let args, err = match pcd_args with
+          | Pcstr_record _ -> [], true
+          | Pcstr_tuple l -> l, false in
+        let str_ty = ptyp_constr ~loc:pcd_name.loc (lident_t ~loc:pcd_name.loc "string") [] in
+        let ty = begin match args with
+          | [] -> expr_of_core_type str_ty
+          | l -> ptyp_tuple ~loc (str_ty::l) |> expr_of_core_type
+        end |> wrap ~loc in
+        let pat_vars =
+          List.mapi (fun i { ptyp_loc = loc; _ } -> pvar ~loc ("%" ^ string_of_int i)) args in
+        let exp_vars =
+          List.mapi (fun i { ptyp_loc = loc; _ } -> evar ~loc ("%" ^ string_of_int i)) args in
+        (* Because of how scope escapes are checked, we need to put the error node in place of the
+           problematic pattern itself *)
+        let lhs = match err with
+          | true -> err_ma ~loc "cannot marshal inlined records" |> ppat_extension ~loc
+          | false -> construct_p ~loc pcd_name.txt pat_vars in
+        let rhs = apply ~loc (dot ~loc "%M" "pack")
+          [apply_v ~loc (dot ~loc "%M" "marshal")
+                   (tuple_e ~loc (estring ~loc:pcd_name.loc pcd_name.txt::exp_vars)) ty] in
+        let get' = case ~lhs ~guard ~rhs in
+
+        let ctor_pat = pstring ~loc:pcd_name.loc pcd_name.txt in
+        let lhs = match args with
+          | [] -> ctor_pat
+          | _ -> ppat_tuple ~loc (ctor_pat::pat_vars) in
+        let rhs = construct_e ~loc:pcd_name.loc pcd_name.txt exp_vars in
+        let lhs' = ppat_any ~loc in
+        let rhs' = apply ~loc (evar ~loc "raise") [construct_e ~loc "Type_error" []] in
+        let put' = pexp_match ~loc (apply_v ~loc (dot ~loc "%M" "unmarshal") (evar ~loc "%v") ty)
+                     [case ~lhs ~guard ~rhs; case ~lhs:lhs' ~guard ~rhs:rhs'] in
+        let put = match put with
+        | None -> Some put'
+        | Some put -> Some (pexp_try ~loc put' [case ~lhs:(construct_p ~loc "Type_error" []) ~guard
+                                                     ~rhs:put]) in
+
+        process_variant_rec (get'::get, put) tl in
+  let (get, put) = process_variant_rec ([], None) ctors in
+  (get, Option.get put)
 
 (** Process type declarations *)
 let process_decl ({ ptype_attributes; _ } as decl) =
@@ -129,19 +175,28 @@ let process_decl ({ ptype_attributes; _ } as decl) =
   | { ptype_name; ptype_loc = loc; ptype_manifest; ptype_kind; ptype_attributes; _ } as decl ->
       let decl = { decl with ptype_attributes = remove_marshal_attr ptype_attributes } in
       let (decl, expr) = match ptype_kind with
-        | Ptype_variant _ -> decl, eerr_ma ~loc "cannot marshal variant types"
-        | Ptype_open -> decl, eerr_ma ~loc "cannot marshal extensible types"
+        | Ptype_variant [] -> (decl, eerr_ma ~loc "cannot marshal empty variant types")
+        | Ptype_variant l ->
+            let (get, put) = List.rev l |> process_variant in
+            let alt  = construct_e ~loc "Alt" [pexp_record ~loc
+              [(lident_t ~loc "a_get", pexp_function ~loc get |> fun_m ~loc "%M");
+               (lident_t ~loc "a_put",
+                let' ~loc Nonrecursive (pvar ~loc "%v")
+                     (apply ~loc (dot ~loc "%M" "unpack") [evar ~loc "%v"]) put
+                |> fun_ ~loc "%v" |> fun_m ~loc "%M")] None] in
+            (decl, alt)
+        | Ptype_open -> (decl, eerr_ma ~loc "cannot marshal extensible types")
         | Ptype_abstract -> (decl, Option.get ptype_manifest |> expr_of_core_type)
         | Ptype_record l ->
             let base_record = if List.length l = 1 then None else Some (evar ~loc "_%r") in
             let (fds, get, put, def, l) = List.rev l |> process_record ~loc ~safe base_record in
             let obj = construct_e ~loc "Object" [pexp_record ~loc
-              [(lident_t ~loc "l_fds", fds);
-               (lident_t ~loc "l_get", wrap_cases ~loc get |> pexp_function ~loc
+              [(lident_t ~loc "o_fds", fds);
+               (lident_t ~loc "o_get", wrap_cases ~loc get |> pexp_function ~loc
                                                            |> fun_ ~loc "_%r");
-               (lident_t ~loc "l_put", wrap_cases ~loc put |> pexp_match ~loc (evar ~loc "%k")
+               (lident_t ~loc "o_put", wrap_cases ~loc put |> pexp_match ~loc (evar ~loc "%k")
                                        |> fun_ ~loc "_%v" |> fun_ ~loc "%k" |> fun_ ~loc "_%r");
-               (lident_t ~loc "l_def", pexp_record ~loc def None)] None] in
+               (lident_t ~loc "o_def", pexp_record ~loc def None)] None] in
             let ptype_attributes = match get with
               | [] -> warn ~loc "should be used with at least one marshalled field in records"
                       ::ptype_attributes
@@ -151,7 +206,7 @@ let process_decl ({ ptype_attributes; _ } as decl) =
       let pvb_attributes = [ignore_warn ~loc 33; ignore_warn ~loc 39] in
       (* This additional wrapping is needed to avoid `Marshal' to shadow types being defined *)
       let pvb_expr =
-        let' ~loc Recursive pvb_pat (wrap ~loc expr) (lident_t' ptype_name |> pexp_ident ~loc)
+        let' ~loc Recursive pvb_pat (wrap ~loc expr) (evar ~loc:ptype_name.loc ptype_name.txt)
         |> open_module ~loc (lident "Marshal") in
       (decl, [{ pvb_expr; pvb_pat; pvb_attributes; pvb_loc = loc }])
 
@@ -190,11 +245,11 @@ let build_converter_expr ~loc ~path:_ name f f' op x y =
   let ext from to_ =
     apply_v ~loc (pexp_extension ~loc (Loc.make ~loc (f' ^ "." ^ cap to_), PStr []))
             (evar ~loc "%v") (evar ~loc "%t")
-    |> let' ~loc Nonrecursive (Loc.make ~loc "%v" |> ppat_var ~loc)
+    |> let' ~loc Nonrecursive (pvar ~loc "%v")
          (apply_v ~loc (pexp_extension ~loc (Loc.make ~loc (f ^ "." ^ cap from), PStr []))
                   (evar ~loc "%v") (evar ~loc "%t"))
-    |> pexp_fun ~loc Nolabel None (Loc.make ~loc "%t" |> ppat_var ~loc)
-    |> pexp_fun ~loc (Labelled "v") None (Loc.make ~loc "%v" |> ppat_var ~loc) in
+    |> pexp_fun ~loc Nolabel None (pvar ~loc "%t")
+    |> pexp_fun ~loc (Labelled "v") None (pvar ~loc "%v") in
   match op.txt with
   | ">" | ">>" | ">>>" | "|>" | "=>" -> ext x y
   | "<" | "<<" | "<<<" | "<|" | "<=" -> ext y x
@@ -214,7 +269,8 @@ let build_converter_ext (name, f, f') =
 let build_loader ~loc:_ ~path:_ =
   let rec build_loader_rec acc = function
   | { pexp_desc = Pexp_construct ({ txt = Lident m; loc }, None); _ } ->
-      (open_infos ~expr:(Ldot ("Marshal_" ^ uncap m |> lident, "Prelude") |> Loc.make ~loc |> pmod_ident ~loc) ~loc ~override:Fresh |> pstr_open ~loc) :: acc
+      (open_infos ~expr:(Ldot ("Marshal_" ^ uncap m |> lident, "Prelude") |> Loc.make ~loc
+                         |> pmod_ident ~loc) ~loc ~override:Fresh |> pstr_open ~loc)::acc
   | { pexp_desc = Pexp_sequence (hd, tl); _ } ->
       build_loader_rec (build_loader_rec acc hd) tl
   | _ -> failwith "???" in

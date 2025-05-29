@@ -3,7 +3,7 @@
 (** Generic failover exception when handling unhandled type extensions *)
 exception Unimplemented_case
 
-(** Exception raised when unmarshalling unknown record fields *)
+(** Exception raised when unmarshalling unknown record fields or variant cases *)
 exception Unknown_field
 
 (** Exception raised when unmarshalling data to the wrong type *)
@@ -25,9 +25,44 @@ type encoder = ..
 (** Convenience type *)
 type 'a ty = unit -> 'a t
 
+(** Minimal encoder signature *)
+module type M = sig
+  (** The internal encoder type *)
+  type t
+
+  (** Unpack an internal value *)
+  val unpack: target -> t
+
+  (** Pack an internal value *)
+  val pack: t -> target
+
+  (** Marshal a value *)
+  val marshal: ?v:'a -> 'a ty -> t
+
+  (** Unmarshal a value *)
+  val unmarshal: ?v:t -> 'a ty -> 'a
+end
+
+(** Encoder signature *)
+module type S = sig
+  include M
+
+  (** The encoder type representation *)
+  val t: encoder
+
+  (** Encode a value into a string representation *)
+  val encode: ?v:'a -> 'a ty -> string
+
+  (** Decode a value from its string representation *)
+  val decode: ?v:string -> 'a ty -> 'a
+end
+
 (** Record marshalling lens type *)
-type ('a, 'b) lens = { l_fds: (encoder * string) list; l_get: 'a -> encoder * string -> target;
-                       l_put: 'a -> encoder * string -> target -> 'a; l_def: 'a }
+type 'a o_lens = { o_fds: (encoder * string) list; o_get: 'a -> encoder * string -> target;
+                   o_put: 'a -> encoder * string -> target -> 'a; o_def: 'a }
+
+(** Variant marshalling lens type *)
+type 'a a_lens = { a_get: (module M) -> 'a -> target; a_put: (module M) -> target -> 'a }
 
 (** Extension of [t] to usual OCaml types *)
 type _ t +=
@@ -35,24 +70,26 @@ type _ t +=
   | Float: float t
   | String: string t
   | List: 'a ty -> 'a list t
+  | Option: 'a ty -> 'a option t
   | Empty_list: string list t
   | Tuple2: 'a ty * 'b ty -> ('a * 'b) t
   | Tuple3: 'a ty * 'b ty * 'c ty -> ('a * 'b * 'c) t
   | Tuple4: 'a ty * 'b ty * 'c ty * 'd ty -> ('a * 'b * 'c * 'd) t
   | Tuple5: 'a ty * 'b ty * 'c ty * 'd ty * 'e ty -> ('a * 'b * 'c * 'd * 'e) t
-  | Object: ('a, _) lens -> 'a t
+  | Object: 'a o_lens -> 'a t
+  | Alt: 'a a_lens -> 'a t
 
 (** Get the default value for the given type *)
-val default: 'a ty -> 'a
+val default: 'a ty -> unit -> 'a
 
 (** Get the given value or the default one for the given type *)
 val get: ?v:'a -> 'a ty -> 'a
 
 (** Helper function to simplify marshalling records *)
-val assoc: encoder -> ?v:'a -> ('a, 'b) lens -> (string * target) list
+val assoc: encoder -> ?v:'a -> 'a o_lens -> (string * target) list
 
 (** Helper function to simplify unmarshalling records *)
-val deassoc: encoder -> ('a, 'b) lens -> (string * target) list -> 'a
+val deassoc: encoder -> 'a o_lens -> (string * target) list -> 'a
 
 (** [int] witness *)
 val int: unit -> int t
@@ -65,6 +102,9 @@ val string: unit -> string t
 
 (** ['a list] witness builder *)
 val list: 'a ty -> unit -> 'a list t
+
+(** ['a option] witness builder *)
+val option: 'a ty -> unit -> 'a option t
 
 (** Empty ['a list] witness *)
 val empty_list: unit -> string list t
@@ -98,30 +138,3 @@ val tuple5: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> unit -> ('a * 'b * 'c *
 
 (** Alias for [tuple5] *)
 val quintuple: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> unit -> ('a * 'b * 'c * 'd * 'e) t
-
-(** Encoder signature *)
-module type S = sig
-  (** The internal encoder type *)
-  type t
-
-  (** The encoder type representation *)
-  val t: encoder
-
-  (** Unpack an internal value *)
-  val unpack: target -> t
-
-  (** Pack an internal value *)
-  val pack: t -> target
-
-  (** Marshal a value *)
-  val marshal: ?v:'a -> 'a ty -> t
-
-  (** Encode a value into a string representation *)
-  val encode: ?v:'a -> 'a ty -> string
-
-  (** Unmarshal a value *)
-  val unmarshal: ?v:t -> 'a ty -> 'a
-
-  (** Decode a value from its string representation *)
-  val decode: ?v:string -> 'a ty -> 'a
-end

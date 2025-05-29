@@ -21,6 +21,9 @@ let process loc lid arg_loc arg =
   let al x = Loc.make ~loc:arg_loc x in
   let v = pstr_value ~loc Nonrecursive in
   let larg = Lident ("%" ^ arg) |> al in
+  let m ~loc name expr =
+    let expr = pmod_structure ~loc expr in
+    module_binding ~loc ~name:(l (Some name)) ~expr |> pstr_module ~loc in
 
   (* type Marshal.target += %Mod *)
   let kind = Pext_decl ([], Pcstr_tuple [ptyp_constr ~loc lid []], None) in
@@ -32,9 +35,7 @@ let process loc lid arg_loc arg =
   let kind = Pext_decl ([], Pcstr_tuple [], None) in
   let path = Ldot (lident "Marshal", "encoder") |> l in
   let constructors = [extension_constructor ~loc ~name:(al arg) ~kind] in
-  let ext' = pmod_structure ~loc [type_extension ~loc ~path ~params:[] ~constructors ~private_
-                                  |> pstr_typext ~loc] in
-  let prelude = module_binding ~loc ~name:(l (Some "Prelude")) ~expr:ext' |> pstr_module ~loc in
+  let ext' = type_extension ~loc ~path ~params:[] ~constructors ~private_ |> pstr_typext ~loc in
 
   (* type t = ty *)
   let decl = type_declaration ~loc ~name:(l "t") ~params:[] ~cstrs:[] ~kind:Ptype_abstract ~private_
@@ -61,7 +62,7 @@ let process loc lid arg_loc arg =
   ] in
   let unpack_def = v [value_binding ~loc ~pat:(ppat_var ~loc (l "unpack")) ~expr] in
 
-  [ext; prelude; t_def; t_def'; pack_def; unpack_def]
+  [ext; m ~loc "Prelude" [ext']; m ~loc "E" [t_def; t_def'; pack_def; unpack_def]]
 
 (** Handle PPX arguments *)
 let declare_target ~loc ~path:_ ~arg lid = match arg with

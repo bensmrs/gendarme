@@ -30,7 +30,9 @@ let test_simple_types_json () =
   check string "float list>" "[1.2,3.4]" ([%encode.Json] ~v:[1.2; 3.4] Marshal.(list float));
   check (list int) "int list<" [1; 2; 3; 4] ([%decode.Json] ~v:"[1,2,3,4]" Marshal.(list int));
   let v = [%encode.Json] ~v:42 Marshal.int in
-  [%decode.Json] ~v Marshal.float |> check (float 1e-8) "int>float" 42. 
+  [%decode.Json] ~v Marshal.float |> check (float 1e-8) "int>float" 42.;
+  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Marshal.(option int));
+  check string "int option 2>" "null" ([%encode.Json] ~v:None Marshal.(option int))
 
 (** A few simple tests with YAML *)
 let test_simple_types_yaml () =
@@ -39,10 +41,12 @@ let test_simple_types_yaml () =
   check string "float list>" "- 1.2\n- 3.4\n" ([%encode.Yaml] ~v:[1.2; 3.4] Marshal.(list float));
   check (list int) "int list<" [1; 2; 3; 4] ([%decode.Yaml] ~v:"[1,2,3,4]" Marshal.(list int));
   let v = [%encode.Yaml] ~v:42 Marshal.int in
-  [%decode.Yaml] ~v Marshal.float |> check (float 1e-8) "int>float" 42. 
+  [%decode.Yaml] ~v Marshal.float |> check (float 1e-8) "int>float" 42.;
+  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Marshal.(option int));
+  check string "int option 2>" "null" ([%encode.Json] ~v:None Marshal.(option int))
 
 (** This module defines interesting cases to check record marshalling *)
-module M = struct
+module M1 = struct
   type t1 = { t1_foo: int [@json "foo"] [@yaml "foo"] } [@@marshal]
   type t2 = { t2_foo: int [@json "foo"]; t2_bar: float [@yaml "bar"] } [@@marshal]
   type t3 = { t3_foo: int [@json "foo"] [@yaml "foo"];
@@ -60,25 +64,79 @@ end
 
 (** A few record tests with JSON *)
 let test_records_json () =
-  check string "t1>" "{\"foo\":42}" M.([%encode.Json] ~v:v1 t1);
-  check string "t2>" "{\"foo\":42}" M.([%encode.Json] ~v:v2 t2);
-  check string "t3>" "{\"foo\":42,\"bar\":1.1}" M.([%encode.Json] ~v:v3 t3);
-  check bool "t3<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":1.1}" t3 = v3);
-  check string "t4>" "{\"foo\":42,\"bar\":{\"foo\":42}}" M.([%encode.Json] ~v:v4 t4);
-  check bool "t4<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":{\"foo\":42}}" t4 = v4);
-  check string "t5>" "{\"foo\":42,\"bar\":[1,\"bar\"]}" M.([%encode.Json] ~v:v5 t5);
-  check bool "t5<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5)
+  check string "t1>" "{\"foo\":42}" M1.([%encode.Json] ~v:v1 t1);
+  check string "t2>" "{\"foo\":42}" M1.([%encode.Json] ~v:v2 t2);
+  check string "t3>" "{\"foo\":42,\"bar\":1.1}" M1.([%encode.Json] ~v:v3 t3);
+  check bool "t3<" true M1.([%decode.Json] ~v:"{\"foo\":42,\"bar\":1.1}" t3 = v3);
+  check string "t4>" "{\"foo\":42,\"bar\":{\"foo\":42}}" M1.([%encode.Json] ~v:v4 t4);
+  check bool "t4<" true M1.([%decode.Json] ~v:"{\"foo\":42,\"bar\":{\"foo\":42}}" t4 = v4);
+  check string "t5>" "{\"foo\":42,\"bar\":[1,\"bar\"]}" M1.([%encode.Json] ~v:v5 t5);
+  check bool "t5<" true M1.([%decode.Json] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5)
 
 (** A few record tests with YAML *)
 let test_records_yaml () =
-  check string "t1>" "foo: 42\n" M.([%encode.Yaml] ~v:v1 t1);
-  check string "t2>" "bar: 1.1\n" M.([%encode.Yaml] ~v:v2 t2);
-  check string "t3>" "foo: 42\nbar: 1.1\n" M.([%encode.Yaml] ~v:v3 t3);
-  check bool "t3<" true M.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":1.1}" t3 = v3);
-  check string "t4>" "foo: 42\nbar:\n  foo: 42\n" M.([%encode.Yaml] ~v:v4 t4);
-  check bool "t4<" true M.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":{\"foo\":42}}" t4 = v4);
-  check string "t5>" "foo: 42\nbar:\n- 1\n- bar\n" M.([%encode.Yaml] ~v:v5 t5);
-  check bool "t5<" true M.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5)
+  check string "t1>" "foo: 42\n" M1.([%encode.Yaml] ~v:v1 t1);
+  check string "t2>" "bar: 1.1\n" M1.([%encode.Yaml] ~v:v2 t2);
+  check string "t3>" "foo: 42\nbar: 1.1\n" M1.([%encode.Yaml] ~v:v3 t3);
+  check bool "t3<" true M1.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":1.1}" t3 = v3);
+  check string "t4>" "foo: 42\nbar:\n  foo: 42\n" M1.([%encode.Yaml] ~v:v4 t4);
+  check bool "t4<" true M1.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":{\"foo\":42}}" t4 = v4);
+  check string "t5>" "foo: 42\nbar:\n- 1\n- bar\n" M1.([%encode.Yaml] ~v:v5 t5);
+  check bool "t5<" true M1.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5)
+
+(** Test optional field name feature *)
+let test_no_field_name () =
+  let module M = struct
+    type t = { foo: int [@json]; bar: string [@json] } [@@marshal]
+    let v = { foo = 42; bar = "foo" }
+  end in
+  check string "t>" "{\"foo\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v t);
+  check bool "t<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t = v)
+
+(** This module defines interesting cases to check variant marshalling *)
+module M2 = struct
+  type t1 = Foo1 | Bar1 [@@marshal]
+  let v1 = Foo1
+  let v1' = Bar1
+  type t2 = Foo2 | Bar2 of int * string [@@marshal]
+  let v2 = Foo2
+  let v2' = Bar2 (42, "bar")
+  type t3 = Foo3 of t3 list | Bar3 of M1.t5 [@@marshal]
+  let v3 = Foo3 [Foo3 []]
+  let v3' = Bar3 { t5_foo = 42; t5_bar = (12, "foo") }
+end
+
+(** A few variant tests with JSON *)
+let test_variants_json () =
+  check string "t1 1>" "\"Foo1\"" M2.([%encode.Json] ~v:v1 t1);
+  check string "t1 2>" "\"Bar1\"" M2.([%encode.Json] ~v:v1' t1);
+  check bool "t1 1<" true M2.([%decode.Json] ~v:"\"Foo1\"" t1 = v1);
+  check bool "t1 2<" true M2.([%decode.Json] ~v:"\"Bar1\"" t1 = v1');
+  check string "t2 1>" "\"Foo2\"" M2.([%encode.Json] ~v:v2 t2);
+  check string "t2 2>" "[\"Bar2\",42,\"bar\"]" M2.([%encode.Json] ~v:v2' t2);
+  check bool "t2 1<" true M2.([%decode.Json] ~v:"\"Foo2\"" t2 = v2);
+  check bool "t2 2<" true M2.([%decode.Json] ~v:"[\"Bar2\",42,\"bar\"]" t2 = v2');
+  check string "t3 1>" "[\"Foo3\",[[\"Foo3\",[]]]]" M2.([%encode.Json] ~v:v3 t3);
+  check string "t3 2>" "[\"Bar3\",{\"foo\":42,\"bar\":[12,\"foo\"]}]" M2.([%encode.Json] ~v:v3' t3);
+  check bool "t3 1<" true M2.([%decode.Json] ~v:"[\"Foo3\",[[\"Foo3\",[]]]]" t3 = v3);
+  M2.([%decode.Json] ~v:"[\"Bar3\",{\"foo\":42,\"bar\":[12,\"foo\"]}]" t3 = v3')
+  |> check bool "t3 2<" true
+
+(** A few variant tests with YAML *)
+let test_variants_yaml () =
+  check string "t1 1>" "Foo1\n" M2.([%encode.Yaml] ~v:v1 t1);
+  check string "t1 2>" "Bar1\n" M2.([%encode.Yaml] ~v:v1' t1);
+  check bool "t1 1<" true M2.([%decode.Yaml] ~v:"Foo1\n" t1 = v1);
+  check bool "t1 2<" true M2.([%decode.Yaml] ~v:"Bar1\n" t1 = v1');
+  check string "t2 1>" "Foo2\n" M2.([%encode.Yaml] ~v:v2 t2);
+  check string "t2 2>" "- Bar2\n- 42\n- bar\n" M2.([%encode.Yaml] ~v:v2' t2);
+  check bool "t2 1<" true M2.([%decode.Yaml] ~v:"Foo2\n" t2 = v2);
+  check bool "t2 2<" true M2.([%decode.Yaml] ~v:"[\"Bar2\",42,\"bar\"]" t2 = v2');
+  check string "t3 1>" "- Foo3\n- - - Foo3\n    - []\n" M2.([%encode.Yaml] ~v:v3 t3);
+  check string "t3 2>" "- Bar3\n- foo: 42\n  bar:\n  - 12\n  - foo\n" M2.([%encode.Yaml] ~v:v3' t3);
+  check bool "t3 1<" true M2.([%decode.Yaml] ~v:"[\"Foo3\",[[\"Foo3\",[]]]]" t3 = v3);
+  M2.([%decode.Yaml] ~v:"[\"Bar3\",{\"foo\":42,\"bar\":[12,\"foo\"]}]" t3 = v3')
+  |> check bool "t3 2<" true
 
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
@@ -93,17 +151,8 @@ let test_transcode_json_yaml () =
   check string "JSON>YAML" yaml ([%transcode Json => Yaml] ~v:json M.t);
   check string "JSON<YAML" json ([%transcode Json <= Yaml] ~v:yaml M.t);
   check string "YAML<YAML" yaml ([%transcode Yaml <= Yaml] ~v:yaml M.t);
-  let v = Yojson.Safe.from_string json in [%remarshal Json => Yaml] ~v M.t |> Yaml.to_string_exn
+  [%remarshal Json => Yaml] ~v:(Yojson.Safe.from_string json) M.t |> Yaml.to_string_exn
   |> check string "JSON>YAML" yaml
-
-(** Test optional field name feature *)
-let test_no_field_name () =
-  let module M = struct
-    type t = { foo: int [@json]; bar: string [@json] } [@@marshal]
-    let v = { foo = 42; bar = "foo" }
-  end in
-  check string "t>" "{\"foo\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v t);
-  check bool "t<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t = v)
 
 (** Test default value feature *)
 let test_default_values () =
@@ -134,15 +183,18 @@ let test_safe_mode () =
 let test_exceptions () =
   let module M = struct
     type _ Marshal.t += Foo
-    type t = { t_foo: int [@json "foo"]; t_bar: string [@json "bar"] } [@@marshal]
+    type t1 = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] } [@@marshal]
+    type t2 = Foo [@@marshal]
   end in
-  (fun () -> Marshal.default ~v:0 (fun () -> M.Foo) |> ignore)
+  (fun () -> Marshal.default ~v:0 (fun () -> M.Foo) () |> ignore)
   |> check_raises "unimplemented_case" Marshal.Unimplemented_case;
   (fun () -> [%encode.Json] ~v:0 (fun () -> M.Foo) |> ignore)
   |> check_raises "unimplemented_case" Marshal.Unimplemented_case;
-  (fun () -> [%decode.Json] ~v:"{\"baz\": 0}" M.t |> ignore)
+  (fun () -> [%decode.Json] ~v:"{\"baz\": 0}" M.t1 |> ignore)
   |> check_raises "unknown_field" Marshal.Unknown_field;
   (fun () -> [%decode.Json] ~v:"\"0\"" Marshal.int |> ignore)
+  |> check_raises "type_error" Marshal.Type_error;
+  (fun () -> [%decode.Json] ~v:"\"Bar\"" M.t2 |> ignore)
   |> check_raises "type_error" Marshal.Type_error
 
 (** Our test suite *)
@@ -151,8 +203,10 @@ let tests = [
   ("test_simple_types_yaml", `Quick, test_simple_types_yaml);
   ("test_records_json", `Quick, test_records_json);
   ("test_records_yaml", `Quick, test_records_yaml);
-  ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
   ("test_no_field_name", `Quick, test_no_field_name);
+  ("test_variants_json", `Quick, test_variants_json);
+  ("test_variants_yaml", `Quick, test_variants_yaml);
+  ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
   ("test_default_values", `Quick, test_default_values);
   ("test_safe_mode", `Quick, test_safe_mode);
   ("test_exceptions", `Quick, test_exceptions)

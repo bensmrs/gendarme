@@ -22,7 +22,7 @@ val json : string = "[{\"foo\":[1,2],\"bar\":[{\"foo\":[3,4],\"bar\":[]}]},3]"
 
 ### Supported OCaml types
 
-`Marshal`, and in particular `ppx_marshal`, supports a limited subset of OCaml types, mostly related to the author’s needs in his projects. Extended support will happen as a function of the author’s needs and project funding.
+`Marshal`, and in particular `ppx_marshal`, only supports a subset of OCaml types, mostly related to the author’s needs in his projects. Extended support will happen as a function of the author’s needs and project funding.
 It should be noted that recursive types are supported, thus enabling to marshal nested types.
 
 #### Supported kinds
@@ -31,7 +31,7 @@ It should be noted that recursive types are supported, thus enabling to marshal 
 |---|---|---|---|
 | Abstract type | `t` | ✓ | See “Supported core types” |
 | Record type | `{ a: a; b: b }` | ✓ | |
-| Variant type | `A \| B` | ✗ | Future versions will allow variant types |
+| Variant type | `A \| B` | ✓ | Inlined records are not supported and probably never will be. Future versions may include the ability to rename constructors when they are marshalled. Empty variants are not marshallable. |
 | Open type | `..` | ✗ | Future versions may allow open types |
 
 ### Supported core types
@@ -60,7 +60,7 @@ For now, `Marshal` can encode data in the following formats:
 
 ## Usage
 
-Users are advised to use the `Marshal` library through the `ppx_marshal` preprocessor extension, as direcly interacting with the `Marshal` module can be difficult, notably when handling record types.
+Users are advised to use the `Marshal` library through the `ppx_marshal` preprocessor extension, as directly interacting with the `Marshal` module can be difficult, notably when handling record types.
 
 Do not hesitate to browse the `tests` directory to see `ppx_marshal` in action.
 
@@ -87,7 +87,7 @@ val baz : unit -> (string * foo) list Marshal.t = <fun>
 
 ### Loading encoders
 
-`Marshal` works with extensible types, so your code needs to declare which encoders you intent to use before you can actually use them. To load both JSON and YAML encoders, simply add to your code:
+`Marshal` works with extensible types, so your code needs to declare which encoders you intend to use before you can actually use them. To load both JSON and YAML encoders, simply add to your code:
 
 ```ocaml
 [%%marshal.load Json; Yaml]
@@ -148,6 +148,23 @@ type t = { foo: t list [@json] } [@@marshal]
 
 generates a recursive witness.
 
+#### Variant types
+
+Variant types are handled transparently as well:
+
+```ocaml
+type t = Foo | Bar of int [@@marshal]
+```
+
+However, because inlined records cannot escape their scope, they are not supported. Variant types are handled quite differently from other types, as they have an inherent structural inhomogeneity. This, along with some historical design decisions within the OCaml compiler, required us to resort to a few trickeries to both please the typechecker and have a consistent behavior. The (currently non-customizable) canonical marshalling of nullary constructors is their string representation, while for non-nullary constructors, it is a tuple made of the constructor string representation and its arguments:
+
+```math
+\begin{aligned}
+\mathrm{marshal}\left(\mathtt{\langle Constructor\rangle}\right) &:= \mathrm{marshal}\left(\mathtt{"\langle Constructor\rangle"}\right)\\
+\mathrm{marshal}\left(\mathtt{\langle Constructor\rangle\left(\langle argument\rangle,...\right)}\right) &:= \mathrm{marshal}\left(\mathtt{\left("\langle Constructor\rangle",\langle argument\rangle,...\right)}\right)
+\end{aligned}
+```
+
 ## Extension clash
 
 If you are using other preprocessor extensions, the way `[@@marshal]` interprets record attributes can clash with other annotations. To avoid that, you can use `ppx_marshal`’s safe mode by marshalling your records with `[@@marshal.safe]`. This way, only attributes prefixed with `marshal.` are handled:
@@ -194,6 +211,8 @@ The `[%%target]` extension can also be used in `.ml` files, and writes most of t
 * `encode: type a. ?v:a -> a Marshal.ty -> string`, to encode values;
 * `unmarshal: type a. ?v:t -> a Marshal.ty -> a`, to unmarshal values;
 * `decode: type a. ?v:string -> a Marshal.ty -> a`, to decode values.
+
+Please take inspiration from the already provided encoders.
 
 ### Writing custom types
 
