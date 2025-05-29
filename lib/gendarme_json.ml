@@ -1,7 +1,7 @@
-open Marshal
+open Gendarme
 [%%target.Json Yojson.Safe.t]
 
-module rec M : Marshal.M with type t = E.t = struct
+module rec M : Gendarme.M with type t = E.t = struct
   include E
 
   let rec marshal : type a. ?v:a -> a ty -> t = fun ?v ty -> match ty () with

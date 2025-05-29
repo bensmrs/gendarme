@@ -7,8 +7,8 @@ description:
 maintainer: ["Benjamin Somers <benjamin.somers@imt-atlantique.fr>"]
 authors: ["Benjamin Somers <benjamin.somers@imt-atlantique.fr>"]
 license: "MIT"
-homepage: "https://github.com/bensmrs/marshal"
-bug-reports: "https://github.com/bensmrs/marshal/issues"
+homepage: "https://github.com/bensmrs/gendarme"
+bug-reports: "https://github.com/bensmrs/gendarme/issues"
 depends: [
   "dune" {>= "2.7"}
   "odoc" {with-doc}
@@ -27,4 +27,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/bensmrs/marshal.git"
+dev-repo: "git+https://github.com/bensmrs/gendarme.git"

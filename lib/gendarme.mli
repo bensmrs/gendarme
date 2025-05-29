@@ -1,4 +1,4 @@
-(** This module provides the [Marshal] library *)
+(** This module provides the [Gendarme] library *)
 
 (** Generic failover exception when handling unhandled type extensions *)
 exception Unimplemented_case

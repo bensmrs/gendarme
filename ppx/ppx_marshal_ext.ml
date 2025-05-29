@@ -1,4 +1,4 @@
-(** This module provides the [[%%marshal.target]] PPX for the Marshal library *)
+(** This module provides the [[%%marshal.target]] PPX for the Gendarme library *)
 
 open Ppxlib
 open Ast_builder.Default
@@ -25,15 +25,15 @@ let process loc lid arg_loc arg =
     let expr = pmod_structure ~loc expr in
     module_binding ~loc ~name:(l (Some name)) ~expr |> pstr_module ~loc in
 
-  (* type Marshal.target += %Mod *)
+  (* type Gendarme.target += %Mod *)
   let kind = Pext_decl ([], Pcstr_tuple [ptyp_constr ~loc lid []], None) in
-  let path = Ldot (lident "Marshal", "target") |> l in
+  let path = Ldot (lident "Gendarme", "target") |> l in
   let constructors = [extension_constructor ~loc ~name:(al ("%" ^ arg)) ~kind] in
   let ext = type_extension ~loc ~path ~params:[] ~constructors ~private_ |> pstr_typext ~loc in
 
-  (* type Marshal.encoder += Mod *)
+  (* type Gendarme.encoder += Mod *)
   let kind = Pext_decl ([], Pcstr_tuple [], None) in
-  let path = Ldot (lident "Marshal", "encoder") |> l in
+  let path = Ldot (lident "Gendarme", "encoder") |> l in
   let constructors = [extension_constructor ~loc ~name:(al arg) ~kind] in
   let ext' = type_extension ~loc ~path ~params:[] ~constructors ~private_ |> pstr_typext ~loc in
 
@@ -58,7 +58,7 @@ let process loc lid arg_loc arg =
     case ~lhs:(Some vpat |> ppat_construct ~loc larg) ~guard:None ~rhs:vexp;
     case ~lhs:(ppat_any ~loc) ~guard:None
          ~rhs:(pexp_apply ~loc (lident "raise" |> l |> pexp_ident ~loc)
-                 [Nolabel, pexp_construct ~loc (Ldot (lident "Marshal", "Unpack_error") |> l) None])
+                 [Nolabel, pexp_construct ~loc (Ldot (lident "Gendarme", "Unpack_error") |> l) None])
   ] in
   let unpack_def = v [value_binding ~loc ~pat:(ppat_var ~loc (l "unpack")) ~expr] in
 
@@ -80,7 +80,7 @@ let process' loc lid arg_loc arg =
   let l x = Loc.make ~loc x in
   let params = [] in
   let manifest = Some (ptyp_constr ~loc lid []) in
-  let path = Ldot (Lident "Marshal", "encoder") |> l in
+  let path = Ldot (Lident "Gendarme", "encoder") |> l in
   let cons = [Pwith_type (lident "t" |> l,
                           type_declaration ~loc ~name:(l "t") ~params ~cstrs:[] ~kind:Ptype_abstract
                                            ~private_ ~manifest)] in
@@ -88,7 +88,7 @@ let process' loc lid arg_loc arg =
                                             ~kind:(Pext_decl ([], Pcstr_tuple [], None))] in
   let type_ = pmty_signature ~loc [psig_typext ~loc (type_extension ~loc ~path ~params ~constructors
                                                                     ~private_)] in
-  [psig_include ~loc (pmty_with ~loc (pmty_ident ~loc (Ldot (lident "Marshal", "S") |> l)) cons
+  [psig_include ~loc (pmty_with ~loc (pmty_ident ~loc (Ldot (lident "Gendarme", "S") |> l)) cons
                       |> include_infos ~loc);
    psig_module ~loc (module_declaration ~loc ~name:(Some "Prelude" |> l) ~type_)]
 

@@ -7,43 +7,43 @@ open Alcotest
 (** These compile-time checks allow for easier debugging *)
 module _ = struct
   type t1 = int [@@marshal]
-  let _ = (t1:int Marshal.ty)
+  let _ = (t1:int Gendarme.ty)
   type t2 = string [@@marshal]
-  let _ = (t2:string Marshal.ty)
+  let _ = (t2:string Gendarme.ty)
   type t3 = t1 [@@marshal]
-  let _ = (t3:int Marshal.ty)
+  let _ = (t3:int Gendarme.ty)
   type t4 = t2 list [@@marshal]
-  let _ = (t4:string list Marshal.ty)
+  let _ = (t4:string list Gendarme.ty)
   type t5 = t4 list [@@marshal]
-  let _ = (t5:string list list Marshal.ty)
+  let _ = (t5:string list list Gendarme.ty)
   type t6 = int * t2 [@@marshal]
-  let _ = (t6:(int * string) Marshal.ty)
+  let _ = (t6:(int * string) Gendarme.ty)
   type t7 = (t6 * t3) list * t5 [@@marshal]
-  let _ = (t7:(((int * string) * int) list * string list list) Marshal.ty)
+  let _ = (t7:(((int * string) * int) list * string list list) Gendarme.ty)
   type _t = t7
 end
 
 (** A few simple tests with JSON *)
 let test_simple_types_json () =
-  check string "int>" "42" ([%encode.Json] ~v:42 Marshal.int);
-  check string "string>" "\"42\"" ([%encode.Json] ~v:"42" Marshal.string);
-  check string "float list>" "[1.2,3.4]" ([%encode.Json] ~v:[1.2; 3.4] Marshal.(list float));
-  check (list int) "int list<" [1; 2; 3; 4] ([%decode.Json] ~v:"[1,2,3,4]" Marshal.(list int));
-  let v = [%encode.Json] ~v:42 Marshal.int in
-  [%decode.Json] ~v Marshal.float |> check (float 1e-8) "int>float" 42.;
-  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Marshal.(option int));
-  check string "int option 2>" "null" ([%encode.Json] ~v:None Marshal.(option int))
+  check string "int>" "42" ([%encode.Json] ~v:42 Gendarme.int);
+  check string "string>" "\"42\"" ([%encode.Json] ~v:"42" Gendarme.string);
+  check string "float list>" "[1.2,3.4]" ([%encode.Json] ~v:[1.2; 3.4] Gendarme.(list float));
+  check (list int) "int list<" [1; 2; 3; 4] ([%decode.Json] ~v:"[1,2,3,4]" Gendarme.(list int));
+  let v = [%encode.Json] ~v:42 Gendarme.int in
+  [%decode.Json] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
+  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int))
 
 (** A few simple tests with YAML *)
 let test_simple_types_yaml () =
-  check string "int>" "42\n" ([%encode.Yaml] ~v:42 Marshal.int);
-  check string "string>" "\"42\"\n" ([%encode.Yaml] ~v:"42" Marshal.string);
-  check string "float list>" "- 1.2\n- 3.4\n" ([%encode.Yaml] ~v:[1.2; 3.4] Marshal.(list float));
-  check (list int) "int list<" [1; 2; 3; 4] ([%decode.Yaml] ~v:"[1,2,3,4]" Marshal.(list int));
-  let v = [%encode.Yaml] ~v:42 Marshal.int in
-  [%decode.Yaml] ~v Marshal.float |> check (float 1e-8) "int>float" 42.;
-  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Marshal.(option int));
-  check string "int option 2>" "null" ([%encode.Json] ~v:None Marshal.(option int))
+  check string "int>" "42\n" ([%encode.Yaml] ~v:42 Gendarme.int);
+  check string "string>" "\"42\"\n" ([%encode.Yaml] ~v:"42" Gendarme.string);
+  check string "float list>" "- 1.2\n- 3.4\n" ([%encode.Yaml] ~v:[1.2; 3.4] Gendarme.(list float));
+  check (list int) "int list<" [1; 2; 3; 4] ([%decode.Yaml] ~v:"[1,2,3,4]" Gendarme.(list int));
+  let v = [%encode.Yaml] ~v:42 Gendarme.int in
+  [%decode.Yaml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
+  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int))
 
 (** This module defines interesting cases to check record marshalling *)
 module M1 = struct
@@ -179,23 +179,23 @@ let test_safe_mode () =
   check bool "t2<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2 = v2);
   check bool "t3<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t3 = v3)
 
-(** Test exceptions raised by [Marshal] *)
+(** Test exceptions raised by [Gendarme] *)
 let test_exceptions () =
   let module M = struct
-    type _ Marshal.t += Foo
+    type _ Gendarme.t += Foo
     type t1 = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] } [@@marshal]
     type t2 = Foo [@@marshal]
   end in
-  (fun () -> Marshal.default ~v:0 (fun () -> M.Foo) () |> ignore)
-  |> check_raises "unimplemented_case" Marshal.Unimplemented_case;
+  (fun () -> Gendarme.default ~v:0 (fun () -> M.Foo) () |> ignore)
+  |> check_raises "unimplemented_case" Gendarme.Unimplemented_case;
   (fun () -> [%encode.Json] ~v:0 (fun () -> M.Foo) |> ignore)
-  |> check_raises "unimplemented_case" Marshal.Unimplemented_case;
+  |> check_raises "unimplemented_case" Gendarme.Unimplemented_case;
   (fun () -> [%decode.Json] ~v:"{\"baz\": 0}" M.t1 |> ignore)
-  |> check_raises "unknown_field" Marshal.Unknown_field;
-  (fun () -> [%decode.Json] ~v:"\"0\"" Marshal.int |> ignore)
-  |> check_raises "type_error" Marshal.Type_error;
+  |> check_raises "unknown_field" Gendarme.Unknown_field;
+  (fun () -> [%decode.Json] ~v:"\"0\"" Gendarme.int |> ignore)
+  |> check_raises "type_error" Gendarme.Type_error;
   (fun () -> [%decode.Json] ~v:"\"Bar\"" M.t2 |> ignore)
-  |> check_raises "type_error" Marshal.Type_error
+  |> check_raises "type_error" Gendarme.Type_error
 
 (** Our test suite *)
 let tests = [

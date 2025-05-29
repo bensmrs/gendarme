@@ -1,18 +1,18 @@
 (library
- (name marshal)
- (public_name marshal)
- (modules marshal))
+ (name gendarme)
+ (public_name gendarme)
+ (modules gendarme))
 
 (library
- (name marshal_json)
- (public_name marshal-json)
- (modules marshal_json)
- (libraries marshal yojson)
+ (name gendarme_json)
+ (public_name gendarme-json)
+ (modules gendarme_json)
+ (libraries gendarme yojson)
  (preprocess (pps ppx_marshal_ext)))
 
 (library
- (name marshal_yaml)
- (public_name marshal-yaml)
- (modules marshal_yaml)
- (libraries marshal yaml)
+ (name gendarme_yaml)
+ (public_name gendarme-yaml)
+ (modules gendarme_yaml)
+ (libraries gendarme yaml)
  (preprocess (pps ppx_marshal_ext)))

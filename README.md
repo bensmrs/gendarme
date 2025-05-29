@@ -1,6 +1,8 @@
-# `Marshal`
+# `Gendarme`
 
-`Marshal` is a marshalling library for OCaml freely inspired from Go struct tags. It provides `ppx_marshal`, a preprocessor extension allowing users to easily marshal and unmarshal arbitrary data in a variety of formats. It is designed to be extensible in both the formats it targets and in the data types it is able to marshal.
+`Gendarme` is a marshalling library for OCaml freely inspired from Go struct tags. It provides `ppx_marshal`, a preprocessor extension allowing users to easily marshal and unmarshal arbitrary data in a variety of formats. It is designed to be extensible in both the formats it targets and in the data types it is able to marshal.
+
+The library was originally named `Marshal`, but the author figured a bit late that a module of the same name was already in the standard library. “Gendarme” is one way to translate “Marshal” in French.
 
 ## Introduction
 ### Introductory example
@@ -22,7 +24,7 @@ val json : string = "[{\"foo\":[1,2],\"bar\":[{\"foo\":[3,4],\"bar\":[]}]},3]"
 
 ### Supported OCaml types
 
-`Marshal`, and in particular `ppx_marshal`, only supports a subset of OCaml types, mostly related to the author’s needs in his projects. Extended support will happen as a function of the author’s needs and project funding.
+`Gendarme`, and in particular `ppx_marshal`, only supports a subset of OCaml types, mostly related to the author’s needs in his projects. Extended support will happen as a function of the author’s needs and project funding.
 It should be noted that recursive types are supported, thus enabling to marshal nested types.
 
 #### Supported kinds
@@ -51,7 +53,7 @@ It should be noted that recursive types are supported, thus enabling to marshal 
 
 ### Supported encoders
 
-For now, `Marshal` can encode data in the following formats:
+For now, `Gendarme` can encode data in the following formats:
 
 | Format | Library | Internal type |
 |---|---|---|
@@ -60,7 +62,7 @@ For now, `Marshal` can encode data in the following formats:
 
 ## Usage
 
-Users are advised to use the `Marshal` library through the `ppx_marshal` preprocessor extension, as directly interacting with the `Marshal` module can be difficult, notably when handling record types.
+Users are advised to use the `Gendarme` library through the `ppx_marshal` preprocessor extension, as directly interacting with the `Gendarme` module can be difficult, notably when handling record types.
 
 Do not hesitate to browse the `tests` directory to see `ppx_marshal` in action.
 
@@ -78,16 +80,16 @@ Behind the scenes, `ppx_marshal` generates type witnesses with the same names, t
 
 ```ocaml
 type foo = int
-val foo : unit -> foo Marshal.t = <fun>
+val foo : unit -> foo Gendarme.t = <fun>
 type bar = string * foo
-val bar : unit -> (string * foo) Marshal.t = <fun>
+val bar : unit -> (string * foo) Gendarme.t = <fun>
 type baz = bar list
-val baz : unit -> (string * foo) list Marshal.t = <fun>
+val baz : unit -> (string * foo) list Gendarme.t = <fun>
 ```
 
 ### Loading encoders
 
-`Marshal` works with extensible types, so your code needs to declare which encoders you intend to use before you can actually use them. To load both JSON and YAML encoders, simply add to your code:
+`Gendarme` works with extensible types, so your code needs to declare which encoders you intend to use before you can actually use them. To load both JSON and YAML encoders, simply add to your code:
 
 ```ocaml
 [%%marshal.load Json; Yaml]
@@ -99,7 +101,7 @@ Then, marshalling (resp. encoding) a value to the encoder’s internal type (res
 
 ```ocaml
 let json = [%marshal.Json] ~v:("foo", 42) bar
-val json : Marshal_json.t = `List [`String "foo"; `Int 42]
+val json : Gendarme_json.t = `List [`String "foo"; `Int 42]
 ```
 
 ### Unmarshalling
@@ -176,7 +178,7 @@ type t = { foo: int [@marshal.json] [@foobar] [@marshal.default 42];
 
 ## Advanced information
 
-The information provided here is for the advanced user wanting to extend `Marshal`. This section does not go into much detail, and the author invites the curious reader to consult the source code.
+The information provided here is for the advanced user wanting to extend `Gendarme`. This section does not go into much detail, and the author invites the curious reader to consult the source code.
 
 ### Writing a new encoder
 
@@ -185,7 +187,7 @@ When writing a new encoder, you need two things:
 * A name for your encoder, representing the target data structure
 * The internal type of your target data structure
 
-To work with `ppx_marshal`, encoder modules must be named `Marshal_<encoder name>`. The author would appreciate PRs to add new encoders to the codebase, so that everything is gathered in a single repository.
+To work with `ppx_marshal`, encoder modules must be named `Gendarme_<encoder name>`. The author would appreciate PRs to add new encoders to the codebase, so that everything is gathered in a single repository.
 
 #### Encoder signature
 
@@ -207,13 +209,13 @@ That’s all.
 
 The `[%%target]` extension can also be used in `.ml` files, and writes most of the glue code you need to get started easily. You only need to write 4 functions:
 
-* `marshal: type a. ?v:a -> a Marshal.ty -> t`, to marshal values;
-* `encode: type a. ?v:a -> a Marshal.ty -> string`, to encode values;
-* `unmarshal: type a. ?v:t -> a Marshal.ty -> a`, to unmarshal values;
-* `decode: type a. ?v:string -> a Marshal.ty -> a`, to decode values.
+* `marshal: type a. ?v:a -> a Gendarme.ty -> t`, to marshal values;
+* `encode: type a. ?v:a -> a Gendarme.ty -> string`, to encode values;
+* `unmarshal: type a. ?v:t -> a Gendarme.ty -> a`, to unmarshal values;
+* `decode: type a. ?v:string -> a Gendarme.ty -> a`, to decode values.
 
 Please take inspiration from the already provided encoders.
 
 ### Writing custom types
 
-`Marshal.t` can be extended with custom GADTs, allowing you to define new types to encode. Care must be taken to extend encoders so that they know how to deal with these new types. This README does not cover this advanced use.
+`Gendarme.t` can be extended with custom GADTs, allowing you to define new types to encode. Care must be taken to extend encoders so that they know how to deal with these new types. This README does not cover this advanced use.

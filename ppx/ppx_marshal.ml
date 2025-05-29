@@ -75,7 +75,7 @@ let process_record_attrs ~safe field ty base_record =
         let process_payload a_cst cst_loc =
           let a = pexp_constant ~loc:cst_loc a_cst in
           let field_l = lident_t' field in
-          let m = "Marshal_" ^ attr in
+          let m = "Gendarme_" ^ attr in
           let cons_name = cap attr in
           let f_case = case ~lhs:(ppat_tuple ~loc [construct_p ~loc:attr_name.loc cons_name [];
                                                    ppat_constant ~loc:cst_loc a_cst]) ~guard in
@@ -204,10 +204,10 @@ let process_decl ({ ptype_attributes; _ } as decl) =
             ({ decl with ptype_kind = Ptype_record l; ptype_attributes }, obj) in
       let pvb_pat = ppat_var ~loc ptype_name in
       let pvb_attributes = [ignore_warn ~loc 33; ignore_warn ~loc 39] in
-      (* This additional wrapping is needed to avoid `Marshal' to shadow types being defined *)
+      (* This additional wrapping is needed to avoid `Gendarme' to shadow types being defined *)
       let pvb_expr =
         let' ~loc Recursive pvb_pat (wrap ~loc expr) (evar ~loc:ptype_name.loc ptype_name.txt)
-        |> open_module ~loc (lident "Marshal") in
+        |> open_module ~loc (lident "Gendarme") in
       (decl, [{ pvb_expr; pvb_pat; pvb_attributes; pvb_loc = loc }])
 
 (** Structure visitor *)
@@ -228,14 +228,14 @@ let visitor = object (self)
   method! structure = List.fold_left (fun acc item -> acc @ self#structure_item' item) []
 end
 
-(** Build simple [Marshal_<encoder>.<function>] expressions *)
+(** Build simple [Gendarme_<encoder>.<function>] expressions *)
 let build_encoder_expr f ~loc ~path:_ ~arg = match arg with
-  | Some ({ txt = Lident arg; loc }) -> dot ~loc ("Marshal_" ^ uncap arg) f
+  | Some ({ txt = Lident arg; loc }) -> dot ~loc ("Gendarme_" ^ uncap arg) f
   | Some { loc; _ } -> eerr_me ~loc "expected a valid encoder name"
   | None -> eerr_me ~loc "expected an encoder name"
 
 (** Build extension processors to rewrite [[%<function>.<encoder>]] into
-    [Marshal_<encoder>.<function>] *)
+    [Gendarme_<encoder>.<function>] *)
 let build_encoder_ext f =
   build_encoder_expr f
   |> Extension.(declare_with_path_arg f Context.expression) Ast_pattern.(pstr nil)
@@ -269,7 +269,7 @@ let build_converter_ext (name, f, f') =
 let build_loader ~loc:_ ~path:_ =
   let rec build_loader_rec acc = function
   | { pexp_desc = Pexp_construct ({ txt = Lident m; loc }, None); _ } ->
-      (open_infos ~expr:(Ldot ("Marshal_" ^ uncap m |> lident, "Prelude") |> Loc.make ~loc
+      (open_infos ~expr:(Ldot ("Gendarme_" ^ uncap m |> lident, "Prelude") |> Loc.make ~loc
                          |> pmod_ident ~loc) ~loc ~override:Fresh |> pstr_open ~loc)::acc
   | { pexp_desc = Pexp_sequence (hd, tl); _ } ->
       build_loader_rec (build_loader_rec acc hd) tl
