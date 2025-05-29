@@ -1,6 +1,6 @@
 (lang dune 2.7)
 (name gendarme)
-(version 0.1.0)
+(version 0.2.0)
 (generate_opam_files true)
 (license MIT)
 (authors "Benjamin Somers <benjamin.somers@imt-atlantique.fr>")
