@@ -10,8 +10,7 @@ license: "MIT"
 homepage: "https://github.com/bensmrs/marshal"
 bug-reports: "https://github.com/bensmrs/marshal/issues"
 depends: [
-  "dune" {>= "2.8"}
-  "alcotest" {with-test}
+  "dune" {>= "2.7"}
   "odoc" {with-doc}
 ]
 build: [

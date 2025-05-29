@@ -10,9 +10,13 @@ license: "MIT"
 homepage: "https://github.com/bensmrs/marshal"
 bug-reports: "https://github.com/bensmrs/marshal/issues"
 depends: [
-  "dune" {>= "2.8"}
+  "dune" {>= "2.7"}
+  "alcotest" {with-test}
   "marshal" {= version}
-  "ppxlib" {< "0.36"}
+  "marshal-json" {= version & with-test}
+  "marshal-yaml" {= version & with-test}
+  "ocaml" {>= "4.13.0"}
+  "ppxlib" {>= "0.26.0" & < "0.36"}
   "odoc" {with-doc}
 ]
 build: [

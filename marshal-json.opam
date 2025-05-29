@@ -9,8 +9,7 @@ license: "MIT"
 homepage: "https://github.com/bensmrs/marshal"
 bug-reports: "https://github.com/bensmrs/marshal/issues"
 depends: [
-  "dune" {>= "2.8"}
-  "alcotest" {with-test}
+  "dune" {>= "2.7"}
   "ppx_marshal_ext" {= version}
   "yojson" {>= "1.6.0"}
   "odoc" {with-doc}
