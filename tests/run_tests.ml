@@ -142,6 +142,9 @@ module M2 = struct
   type t3 = Foo3 of t3 list | Bar3 of M1.t5 [@@marshal]
   let v3 = Foo3 [Foo3 []]
   let v3' = Bar3 { t5_foo = 42; t5_bar = (12, "foo") }
+  type t4 = { foo4: t2 [@json] [@yaml] [@toml] [@default Foo2] } [@@marshal]
+  let v4 = { foo4 = Foo2 }
+  let v4' = { foo4 = Bar2 (2, "foo") }
 end
 
 (** A few variant tests with JSON *)
@@ -158,7 +161,11 @@ let test_variants_json () =
   check string "t3 2>" "[\"Bar3\",{\"foo\":42,\"bar\":[12,\"foo\"]}]" M2.([%encode.Json] ~v:v3' t3);
   check bool "t3 1<" true M2.([%decode.Json] ~v:"[\"Foo3\",[[\"Foo3\",[]]]]" t3 = v3);
   M2.([%decode.Json] ~v:"[\"Bar3\",{\"foo\":42,\"bar\":[12,\"foo\"]}]" t3 = v3')
-  |> check bool "t3 2<" true
+  |> check bool "t3 2<" true;
+  check string "t4 1>" "{\"foo4\":\"Foo2\"}" M2.([%encode.Json] ~v:v4 t4);
+  check string "t4 2>" "{\"foo4\":[\"Bar2\",2,\"foo\"]}" M2.([%encode.Json] ~v:v4' t4);
+  check bool "t4 1<" true M2.([%decode.Json] ~v:"{\"foo4\":\"Foo2\"}" t4 = v4);
+  check bool "t4 2<" true M2.([%decode.Json] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4')
 
 (** A few variant tests with TOML *)
 let test_variants_toml () =
@@ -174,8 +181,12 @@ let test_variants_toml () =
   |> check string "t3 1>" "__value = [[\"Foo3\"], [[[[\"Foo3\"], [[]]]]]]\n";
   (* An implementation bug in the Toml library prevents us to perform the [t3 2>] test *)
   M2.([%decode.Toml] ~v:"__value = [[\"Foo3\"],[[[[\"Foo3\"],[[]]]]]]" t3 = v3)
-  |> check bool "t3 1<" true
+  |> check bool "t3 1<" true;
   (* An implementation bug in the Toml library prevents us to perform the [t3 2<] test *)
+  check string "t4 1>" "foo4 = \"Foo2\"\n" M2.([%encode.Toml] ~v:v4 t4);
+  check string "t4 2>" "foo4 = [[\"Bar2\"], [2], [\"foo\"]]\n" M2.([%encode.Toml] ~v:v4' t4);
+  check bool "t4 1<" true M2.([%decode.Toml] ~v:"foo4=\"Foo2\"" t4 = v4);
+  check bool "t4 2<" true M2.([%decode.Toml] ~v:"foo4=[[\"Bar2\"],[2],[\"foo\"]]" t4 = v4')
 
 (** A few variant tests with YAML *)
 let test_variants_yaml () =
@@ -191,7 +202,11 @@ let test_variants_yaml () =
   check string "t3 2>" "- Bar3\n- foo: 42\n  bar:\n  - 12\n  - foo\n" M2.([%encode.Yaml] ~v:v3' t3);
   check bool "t3 1<" true M2.([%decode.Yaml] ~v:"[\"Foo3\",[[\"Foo3\",[]]]]" t3 = v3);
   M2.([%decode.Yaml] ~v:"[\"Bar3\",{\"foo\":42,\"bar\":[12,\"foo\"]}]" t3 = v3')
-  |> check bool "t3 2<" true
+  |> check bool "t3 2<" true;
+  check string "t4 1>" "foo4: Foo2\n" M2.([%encode.Yaml] ~v:v4 t4);
+  check string "t4 2>" "foo4:\n- Bar2\n- 2\n- foo\n" M2.([%encode.Yaml] ~v:v4' t4);
+  check bool "t4 1<" true M2.([%decode.Yaml] ~v:"{\"foo4\":\"Foo2\"}" t4 = v4);
+  check bool "t4 2<" true M2.([%decode.Yaml] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4')
 
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =

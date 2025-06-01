@@ -168,6 +168,8 @@ However, because inlined records cannot escape their scope, they are not support
 \end{aligned}
 ```
 
+Because `ppx_marshal` cannot reasonably infer a default value for variant types, record fields of variant types must define default values.
+
 ## Extension clash
 
 If you are using other preprocessor extensions, the way `[@@marshal]` interprets record attributes can clash with other annotations. To avoid that, you can use `ppx_marshal`’s safe mode by marshalling your records with `[@@marshal.safe]`. This way, only attributes prefixed with `marshal.` are handled:
