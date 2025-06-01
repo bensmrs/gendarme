@@ -23,6 +23,14 @@
   (yojson (>= 1.6.0))))
 
 (package
+ (name gendarme-toml)
+ (synopsis "Libraries to marshal OCaml data structures (TOML)")
+ (description "This package allows to marshal OCaml data structures to TOML")
+ (depends
+  (ppx_marshal_ext (= :version))
+  (toml (>= 7.0.0))))
+
+(package
  (name gendarme-yaml)
  (synopsis "Libraries to marshal OCaml data structures (YAML)")
  (description "This package allows to marshal OCaml data structures to YAML")

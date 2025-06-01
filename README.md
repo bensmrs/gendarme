@@ -55,9 +55,10 @@ It should be noted that recursive types are supported, thus enabling to marshal 
 
 For now, `Gendarme` can encode data in the following formats:
 
-| Format | Library | Internal type |
-|---|---|---|
+| Format | Library | Internal type | Remarks |
+|---|---|---|---|
 | JSON | Yojson | `Yojson.Safe.t` |
+| TOML | Toml | `Toml.Types.value` | Limited support due to problems within the Toml library. Non-record values are wrapped to conform to TOML.
 | YAML | Yaml | `Yaml.value` |
 
 ## Usage

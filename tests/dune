@@ -1,5 +1,5 @@
 (test
  (name run_tests)
  (package ppx_marshal)
- (libraries alcotest gendarme gendarme-json gendarme-yaml)
+ (libraries alcotest gendarme gendarme-json gendarme-toml gendarme-yaml)
  (preprocess (pps ppx_marshal)))

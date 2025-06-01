@@ -11,6 +11,13 @@
  (preprocess (pps ppx_marshal_ext)))
 
 (library
+ (name gendarme_toml)
+ (public_name gendarme-toml)
+ (modules gendarme_toml)
+ (libraries gendarme toml)
+ (preprocess (pps ppx_marshal_ext)))
+
+(library
  (name gendarme_yaml)
  (public_name gendarme-yaml)
  (modules gendarme_yaml)
