@@ -23,6 +23,14 @@
   (yojson (>= 1.6.0))))
 
 (package
+ (name gendarme-toml)
+ (synopsis "Libraries to marshal OCaml data structures (TOML)")
+ (description "This package allows to marshal OCaml data structures to TOML")
+ (depends
+  (ppx_marshal_ext (= :version))
+  (toml (>= 7.1.0))))
+
+(package
  (name gendarme-yaml)
  (synopsis "Libraries to marshal OCaml data structures (YAML)")
  (description "This package allows to marshal OCaml data structures to YAML")
@@ -38,6 +46,7 @@
   (alcotest :with-test)
   (gendarme (= :version))
   (gendarme-json (and (= :version) :with-test))
+  (gendarme-toml (and (= :version) :with-test))
   (gendarme-yaml (and (= :version) :with-test))
   (ocaml (>= 4.13.0))
   (ppxlib (and (>= 0.26.0) (< 0.36)))))
