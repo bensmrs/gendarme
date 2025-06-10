@@ -24,8 +24,11 @@ module rec M : Gendarme.M with type t = E.t = struct
         let (va, vb, vc, vd, ve) = get ?v ty in
         `A [marshal ~v:va a; marshal ~v:vb b; marshal ~v:vc c; marshal ~v:vd d; marshal ~v:ve e]
     | Object o -> `O (assoc t ?v o |> List.map (fun (k, v) -> (k, unpack v)))
-    | Alt a -> a.a_get (module M) (get ?v ty) |> unpack
-    | _ -> raise Unimplemented_case
+    | Map (a, b) -> begin match a () with
+        | String -> `O (get ?v ty |> List.map (fun (k, v) -> (k, marshal ~v b)))
+        | _ -> pair a b |> list |> marshal ?v
+      end
+    | _ -> Gendarme.marshal (module M) ?v ty
 
   let rec unmarshal : type a. ?v:t -> a ty -> a = fun ?v ty -> match ty (), v with
     | Int, Some (`Float f) -> Float.to_int f
@@ -44,11 +47,11 @@ module rec M : Gendarme.M with type t = E.t = struct
         (unmarshal ~v:va a, unmarshal ~v:vb b, unmarshal ~v:vc c, unmarshal ~v:vd d,
          unmarshal ~v:ve e)
     | Object o, Some (`O l) -> List.map (fun (k, v) -> (k, pack v)) l |> deassoc t o
-    | Alt a, Some v -> pack v |> a.a_put (module M)
-    | _, None -> default ty ()
-    | (Int | Float | String | List _ | Empty_list | Tuple2 _ | Tuple3 _ | Tuple4 _ | Tuple5 _
-      | Object _), _ -> raise Type_error
-    | _, _ -> raise Unimplemented_case
+    | Map (a, b), Some (`O l) -> begin match a () with
+        | String -> List.map (fun (k, v) -> (k, unmarshal ~v b)) l
+        | _ -> raise Unimplemented_case
+      end
+    | _ -> Gendarme.unmarshal (module M) ?v ty
 end
 
 include E
