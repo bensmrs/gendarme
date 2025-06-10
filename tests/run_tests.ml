@@ -74,18 +74,18 @@ let test_simple_types_yaml () =
 (** This module defines interesting cases to check record marshalling *)
 module M1 = struct
   type t1 = { t1_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"] } [@@marshal]
+  let v1 = { t1_foo = 42 }
   type t2 = { t2_foo: int [@json "foo"]; t2_bar: float [@yaml "bar"];
               t3_baz: string [@toml "baz"] } [@@marshal]
+  let v2 = { t2_foo = 42; t2_bar = 1.1; t3_baz = "foo" }
   type t3 = { t3_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
               t3_bar: float [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
+  let v3 = { t3_foo = 42; t3_bar = 1.1 }
   type t4 = { t4_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
               t4_bar: t1 [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
+  let v4 = { t4_foo = 42; t4_bar = { t1_foo = 42 } }
   type t5 = { t5_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
               t5_bar: int * string [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
-  let v1 = { t1_foo = 42 }
-  let v2 = { t2_foo = 42; t2_bar = 1.1; t3_baz = "foo" }
-  let v3 = { t3_foo = 42; t3_bar = 1.1 }
-  let v4 = { t4_foo = 42; t4_bar = { t1_foo = 42 } }
   let v5 = { t5_foo = 42; t5_bar = (1, "bar") }
 end
 
@@ -208,6 +208,70 @@ let test_variants_yaml () =
   check bool "t4 1<" true M2.([%decode.Yaml] ~v:"{\"foo4\":\"Foo2\"}" t4 = v4);
   check bool "t4 2<" true M2.([%decode.Yaml] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4')
 
+(** This module defines interesting cases to check variant marshalling *)
+module M3 = struct
+  type t1 = int Seq.t [@@marshal]
+  let v1 = Seq.(cons 5 empty |> cons 4 |> cons 3 |> cons 2 |> cons 1)
+  type t2 = (string, int) Hashtbl.t [@@marshal]
+  let s2 = Seq.(cons ("foo", 42) empty |> cons ("bar", 12))
+  let s2' = Seq.(cons ("bar", 12) empty |> cons ("foo", 42))
+  let v2 = Hashtbl.of_seq s2
+  (* Most marshallers don’t really have an equivalent for non-string-keyed maps *)
+  type t3 = (float, int) Hashtbl.t [@@marshal]
+  let s3 = Seq.(cons (1., 42) empty |> cons (2.5, 12))
+  let s3' = Seq.(cons (2.5, 12) empty |> cons (1., 42))
+  let v3 = Hashtbl.of_seq s3
+end
+
+(** Check whether two seqs are equal *)
+let seq_eq s s' = List.for_all2 (=) (List.of_seq s) (List.of_seq s')
+
+(** A few tests for the proxy feature with JSON *)
+let test_proxies_json () =
+  check string "t1>" "[1,2,3,4,5]" M3.([%encode.Json] ~v:v1 t1);
+  check bool "t1<" true M3.([%decode.Json] ~v:"[1,2,3,4,5]" t1 |> seq_eq v1);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let json = "{\"foo\":42,\"bar\":12}" in
+  let json' = "{\"bar\":12,\"foo\":42}" in
+  check bool "t2>" true M3.(let s = [%encode.Json] ~v:v2 t2 in s = json || s = json');
+  let s = M3.([%decode.Json] ~v:json t2 |> Hashtbl.to_seq) in
+  check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
+  let json = "[[1.0,42],[2.5,12]]" in
+  let json' = "[[2.5,12],[1.0,42]]" in
+  check bool "t3>" true M3.(let s = [%encode.Json] ~v:v3 t3 in s = json || s = json');
+  let s = M3.([%decode.Json] ~v:json t3 |> Hashtbl.to_seq) in
+  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
+
+(** A few tests for the proxy feature with TOML *)
+let test_proxies_toml () =
+  check string "t1>" "__value = [1, 2, 3, 4, 5]\n" M3.([%encode.Toml] ~v:v1 t1);
+  check bool "t1<" true M3.([%decode.Toml] ~v:"__value=[1,2,3,4,5]" t1 |> seq_eq v1);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let toml = "foo = 42\nbar = 12\n" in
+  let toml' = "bar = 12\nfoo = 42\n" in
+  check bool "t2>" true M3.(let s = [%encode.Toml] ~v:v2 t2 in s = toml || s = toml');
+  let s = M3.([%decode.Toml] ~v:toml t2 |> Hashtbl.to_seq) in
+  check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
+  (* An implementation bug in the Toml library prevents us to perform the [t3>] test *)
+  (* An implementation bug in the Toml library prevents us to perform the [t3<] test *)
+  ()
+
+(** A few tests for the proxy feature with YAML *)
+let test_proxies_yaml () =
+  check string "t1>" "- 1\n- 2\n- 3\n- 4\n- 5\n" M3.([%encode.Yaml] ~v:v1 t1);
+  check bool "t1<" true M3.([%decode.Yaml] ~v:"[1,2,3,4,5]" t1 |> seq_eq v1);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let yaml = "foo: 42\nbar: 12\n" in
+  let yaml' = "bar: 12\nfoo: 42\n" in
+  check bool "t2>" true M3.(let s = [%encode.Yaml] ~v:v2 t2 in s = yaml || s = yaml');
+  let s = M3.([%decode.Yaml] ~v:yaml t2 |> Hashtbl.to_seq) in
+  check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
+  let yaml = "- - 1\n  - 42\n- - 2.5\n  - 12\n" in
+  let yaml' = "- - 2.5\n  - 12\n- - 1\n  - 42\n" in
+  check bool "t3>" true M3.(let s = [%encode.Yaml] ~v:v3 t3 in s = yaml || s = yaml');
+  let s = M3.([%decode.Yaml] ~v:yaml t3 |> Hashtbl.to_seq) in
+  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
+
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
   let module M = struct
@@ -279,6 +343,9 @@ let tests = [
   ("test_variants_json", `Quick, test_variants_json);
   ("test_variants_toml", `Quick, test_variants_toml);
   ("test_variants_yaml", `Quick, test_variants_yaml);
+  ("test_proxies_json", `Quick, test_proxies_json);
+  ("test_proxies_toml", `Quick, test_proxies_toml);
+  ("test_proxies_yaml", `Quick, test_proxies_yaml);
   ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
   ("test_default_values", `Quick, test_default_values);
   ("test_safe_mode", `Quick, test_safe_mode);

@@ -50,8 +50,14 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Object o -> TTable (assoc t ?v o
                           |> List.map (fun (k, v) -> (Toml.Types.Table.Key.of_string k, unpack v))
                           |> List.to_seq |> Toml.Types.Table.of_seq)
-    | Alt a -> a.a_get (module M) (get ?v ty) |> unpack
-    | _ -> raise Unimplemented_case
+    | Map (a, b) -> begin match a () with
+        | String ->
+            TTable (get ty ?v
+                    |> List.map (fun (k, v) -> (Toml.Types.Table.Key.of_string k, marshal ~v b))
+                    |> List.to_seq |> Toml.Types.Table.of_seq)
+        | _ -> pair a b |> list |> marshal ?v
+      end
+    | _ -> Gendarme.marshal (module M) ?v ty
 
   (** Same here *)
   let rec unmarshal_list : type a. v:Toml.Types.array -> a ty -> a list
@@ -90,11 +96,13 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Object o, Some (TTable tb) ->
         Toml.Types.Table.bindings tb
         |> List.map (fun (k, v) -> (Toml.Types.Table.Key.to_string k, pack v)) |> deassoc t o
-    | Alt a, Some v -> pack v |> a.a_put (module M)
-    | _, None -> default ty ()
-    | (Int | Float | String | List _ | Empty_list | Tuple2 _ | Tuple3 _ | Tuple4 _ | Tuple5 _
-      | Object _), _ -> raise Type_error
-    | _, _ -> raise Unimplemented_case
+    | Map (a, b), Some (TTable tb) -> begin match a () with
+        | String ->
+            Toml.Types.Table.bindings tb
+            |> List.map (fun (k, v) -> (Toml.Types.Table.Key.to_string k, unmarshal ~v b))
+        | _ -> raise Unimplemented_case
+      end
+    | _ -> Gendarme.unmarshal (module M) ?v ty
 end
 
 include E
