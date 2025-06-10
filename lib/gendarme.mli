@@ -72,6 +72,7 @@ type _ t +=
   | Int: int t
   | Float: float t
   | String: string t
+  | Bool: bool t
   | List: 'a ty -> 'a list t
   | Option: 'a ty -> 'a option t
   | Empty_list: string list t
@@ -110,6 +111,9 @@ val float: unit -> float t
 
 (** [string] witness *)
 val string: unit -> string t
+
+(** [bool] witness *)
+val bool: unit -> bool t
 
 (** ['a list] witness builder *)
 val list: 'a ty -> unit -> 'a list t
