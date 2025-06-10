@@ -2,6 +2,7 @@ exception Unimplemented_case
 exception Unknown_field
 exception Type_error
 exception Unpack_error
+exception Unknown_alt_default
 
 type _ t = ..
 type target = ..
@@ -62,6 +63,7 @@ let rec default : type a. a ty -> unit -> a = fun t () -> match t () with
   | Object { o_def; _ } -> o_def
   | Proxy { p_wit; p_put; _ } -> default p_wit () |> p_put
   | Map _ -> []
+  | Alt _ -> raise Unknown_alt_default
   | _ -> raise Unimplemented_case
 
 let get : type a. ?v:a -> a ty -> a = fun ?v t -> match v with
