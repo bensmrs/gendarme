@@ -27,6 +27,7 @@ end
 let test_simple_types_json () =
   check string "int>" "42" ([%encode.Json] ~v:42 Gendarme.int);
   check string "string>" "\"42\"" ([%encode.Json] ~v:"42" Gendarme.string);
+  check string "bool>" "true" ([%encode.Json] ~v:true Gendarme.bool);
   check string "float list>" "[1.2,3.4]" ([%encode.Json] ~v:[1.2; 3.4] Gendarme.(list float));
   check (list int) "int list<" [1; 2; 3; 4] ([%decode.Json] ~v:"[1,2,3,4]" Gendarme.(list int));
   check string "empty list 1>" "[]" ([%encode.Json] ~v:[] Gendarme.(list int));
@@ -42,6 +43,7 @@ let test_simple_types_json () =
 let test_simple_types_toml () =
   check string "int>" "__value = 42\n" ([%encode.Toml] ~v:42 Gendarme.int);
   check string "string>" "__value = \"42\"\n" ([%encode.Toml] ~v:"42" Gendarme.string);
+  check string "bool>" "__value = true\n" ([%encode.Toml] ~v:true Gendarme.bool);
   [%encode.Toml] ~v:[1.2; 3.4] Gendarme.(list float)
   |> check string "float list>" "__value = [1.2, 3.4]\n";
   [%decode.Toml] ~v:"__value=[1,2,3,4]" Gendarme.(list int)
@@ -60,6 +62,7 @@ let test_simple_types_toml () =
 let test_simple_types_yaml () =
   check string "int>" "42\n" ([%encode.Yaml] ~v:42 Gendarme.int);
   check string "string>" "\"42\"\n" ([%encode.Yaml] ~v:"42" Gendarme.string);
+  check string "bool>" "true\n" ([%encode.Yaml] ~v:true Gendarme.bool);
   check string "float list>" "- 1.2\n- 3.4\n" ([%encode.Yaml] ~v:[1.2; 3.4] Gendarme.(list float));
   check (list int) "int list<" [1; 2; 3; 4] ([%decode.Yaml] ~v:"[1,2,3,4]" Gendarme.(list int));
   check string "empty list 1>" "[]\n" ([%encode.Yaml] ~v:[] Gendarme.(list int));

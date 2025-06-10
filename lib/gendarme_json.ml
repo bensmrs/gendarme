@@ -8,6 +8,7 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Int -> `Int (get ?v ty)
     | Float -> `Float (get ?v ty)
     | String -> `String (get ?v ty)
+    | Bool -> `Bool (get ?v ty)
     | List a -> `List (get ?v ty |> List.map (fun v -> marshal ~v a))
     | Option a -> get ?v ty |> Option.fold ~none:`Null ~some:(fun v -> marshal ~v a)
     | Empty_list -> `List []
@@ -32,11 +33,15 @@ module rec M : Gendarme.M with type t = E.t = struct
 
   let rec unmarshal : type a. ?v:t -> a ty -> a = fun ?v ty -> match ty (), v with
     | Int, Some (`Int i) -> i
+    | Int, Some (`Bool b) -> Bool.to_int b
     | Float, Some (`Float f) -> f
     | Float, Some (`Int i) -> Float.of_int i
+    | Float, Some (`Bool b) -> Bool.to_float b
     | String, Some (`String s) -> s
     | String, Some (`Int i) -> Int.to_string i
     | String, Some (`Float f) -> Float.to_string f
+    | String, Some (`Bool b) -> Bool.to_string b
+    | Bool, Some (`Bool b) -> b
     | List ty, Some (`List l) -> List.map (fun v -> unmarshal ~v ty) l
     | Empty_list, Some (`List []) -> []
     | Tuple2 (a, b), Some (`List [va; vb]) ->

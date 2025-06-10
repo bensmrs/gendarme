@@ -10,6 +10,7 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Int -> NodeInt (get ?v ty)
     | Float -> NodeFloat (get ?v ty)
     | String -> NodeString (get ?v ty)
+    | Bool -> NodeBool (get ?v ty)
     | List _ | Alt _ -> NodeArray (Option.fold ~none:[] ~some:(fun v -> v) v
         |> List.map (fun v -> match marshal ~v a with
              | TArray a -> a
@@ -26,6 +27,7 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Int -> TInt (get ?v ty)
     | Float -> TFloat (get ?v ty)
     | String -> TString (get ?v ty)
+    | Bool -> TBool (get ?v ty)
     | List a -> TArray (marshal_list ?v a ty)
     | Option a -> TArray (get ?v ty |> Option.fold ~none:(Toml.Types.NodeEmpty)
                                                    ~some:(fun v -> marshal_list ~v:[v] a (list a)))
@@ -63,8 +65,15 @@ module rec M : Gendarme.M with type t = E.t = struct
   let rec unmarshal_list : type a. v:Toml.Types.array -> a ty -> a list
                          = fun ~v ty -> match ty (), v with
     | Int, NodeInt l -> l
+    | Int, NodeBool l -> List.map Bool.to_int l
     | Float, NodeFloat l -> l
+    | Float, NodeInt l -> List.map Float.of_int l
+    | Float, NodeBool l -> List.map Bool.to_float l
     | String, NodeString l -> l
+    | String, NodeInt l -> List.map Int.to_string l
+    | String, NodeFloat l -> List.map Float.to_string l
+    | String, NodeBool l -> List.map Bool.to_string l
+    | Bool, NodeBool l -> l
     | List a, NodeArray l -> List.map (fun v -> unmarshal_list ~v a) l
     | Alt _, NodeArray l -> List.map (fun v -> unmarshal ~v:(TArray v) ty) l
     | Empty_list, NodeArray l -> (* Again, weird… *) List.map (fun _ -> []) l
@@ -73,11 +82,15 @@ module rec M : Gendarme.M with type t = E.t = struct
 
   and unmarshal : type a. ?v:t -> a ty -> a = fun ?v ty -> match ty (), v with
     | Int, Some (TInt i) -> i
+    | Int, Some (TBool b) -> Bool.to_int b
     | Float, Some (TFloat f) -> f
     | Float, Some (TInt i) -> Float.of_int i
+    | Float, Some (TBool b) -> Bool.to_float b
     | String, Some (TString s) -> s
     | String, Some (TInt i) -> Int.to_string i
     | String, Some (TFloat f) -> Float.to_string f
+    | String, Some (TBool b) -> Bool.to_string b
+    | Bool, Some (TBool b) -> b
     | List ty, Some (TArray a) -> unmarshal_list ~v:a ty
     | Empty_list, Some (TArray NodeEmpty) -> []
     | Tuple2 (a, b), Some (TArray (NodeArray [va; vb])) ->

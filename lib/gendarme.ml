@@ -34,6 +34,7 @@ type _ t +=
   | Int: int t
   | Float: float t
   | String: string t
+  | Bool: bool t
   | List: 'a ty -> 'a list t
   | Option: 'a ty -> 'a option t
   | Empty_list: string list t
@@ -50,6 +51,7 @@ let rec default : type a. a ty -> unit -> a = fun t () -> match t () with
   | Int -> 0
   | Float -> 0.
   | String -> ""
+  | Bool -> false
   | List _ -> []
   | Option _ -> None
   | Empty_list -> []
@@ -69,6 +71,7 @@ let get : type a. ?v:a -> a ty -> a = fun ?v t -> match v with
 let int () = Int
 let float () = Float
 let string () = String
+let bool () = Bool
 let list a () = List a
 let option a () = Option a
 let empty_list () = Empty_list
