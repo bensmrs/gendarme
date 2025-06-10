@@ -13,6 +13,11 @@ exception Type_error
     normal circumstances. *)
 exception Unpack_error
 
+(** Exception raised when getting the default value of a variant type. This usually happens when
+    unmarshalling a record type which does not provide a default value for variants. Variant types
+    require specifying a default value with [[@default]] when used in records. *)
+exception Unknown_alt_default
+
 (** Extensible GADT wrapping OCaml types *)
 type _ t = ..
 

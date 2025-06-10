@@ -322,6 +322,7 @@ let test_exceptions () =
     type _ Gendarme.t += Foo
     type t1 = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] } [@@marshal]
     type t2 = Foo [@@marshal]
+    type t3 = { t3_foo: t2 [@json "foo"] } [@@marshal]
   end in
   (fun () -> Gendarme.default ~v:0 (fun () -> M.Foo) () |> ignore)
   |> check_raises "unimplemented_case" Gendarme.Unimplemented_case;
@@ -332,7 +333,9 @@ let test_exceptions () =
   (fun () -> [%decode.Json] ~v:"\"0\"" Gendarme.int |> ignore)
   |> check_raises "type_error" Gendarme.Type_error;
   (fun () -> [%decode.Json] ~v:"\"Bar\"" M.t2 |> ignore)
-  |> check_raises "type_error" Gendarme.Type_error
+  |> check_raises "type_error" Gendarme.Type_error;
+  (fun () -> [%decode.Json] ~v:"{\"foo\": \"Foo\"}" M.t3 |> ignore)
+  |> check_raises "unknown_alt_default" Gendarme.Unknown_alt_default
 
 (** Our test suite *)
 let tests = [
