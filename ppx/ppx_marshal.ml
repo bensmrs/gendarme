@@ -164,7 +164,7 @@ let process_variant ctors =
   let (get, put) = process_variant_rec ([], None) ctors in
   (get, Option.get put)
 
-(** Process type declarations *)
+(** Process type declarations in implementations *)
 let process_decl ({ ptype_attributes; _ } as decl) =
   let has_marshal, safe = check_marshal_attr ptype_attributes in
   match decl with
@@ -210,7 +210,19 @@ let process_decl ({ ptype_attributes; _ } as decl) =
         |> open_module ~loc (lident "Gendarme") in
       (decl, [{ pvb_expr; pvb_pat; pvb_attributes; pvb_loc = loc }])
 
-(** Structure visitor *)
+(** Process type declarations in interfaces *)
+let process_decl' ({ ptype_attributes; _ } as decl) =
+  let has_marshal, _ = check_marshal_attr ptype_attributes in
+  match decl with
+  | _ when not has_marshal -> decl, []
+  | { ptype_name = name; ptype_loc = loc; ptype_attributes; _ } as decl ->
+      let decl = { decl with ptype_attributes = remove_marshal_attr ptype_attributes } in
+      let type_ = ptyp_constr ~loc (Ldot (lident "Gendarme", "ty") |> Loc.make ~loc)
+                              [ptyp_constr ~loc (lident_t' name) []] in
+      let value = value_description ~loc ~name ~type_ ~prim:[] in
+      (decl, [value])
+
+(** AST visitor *)
 let visitor = object (self)
   inherit Ast_traverse.map
   method structure_item' = function
@@ -225,7 +237,21 @@ let visitor = object (self)
         end
     | item -> [self#structure_item item]
 
+  method signature_item' = function
+    | { psig_desc = Psig_type (flag, decls); _ } as item ->
+        let (t, v) = List.fold_left
+                       (fun (t, v) decl -> let (t', v') = process_decl' decl in (t @ [t'], v @ v'))
+                       ([], []) decls in
+        begin match v with
+          | [] -> [{ item with psig_desc = Psig_type (flag, t) }]
+          | _ -> { item with psig_desc = Psig_type (flag, t) }
+                 ::List.map (fun v -> { item with psig_desc = Psig_value v }) v
+        end
+    | item -> [self#signature_item item]
+
   method! structure = List.fold_left (fun acc item -> acc @ self#structure_item' item) []
+
+  method! signature = List.fold_left (fun acc item -> acc @ self#signature_item' item) []
 end
 
 (** Build simple [Gendarme_<encoder>.<function>] expressions *)
@@ -289,5 +315,5 @@ let cfuns = [("transcode", "decode", "encode"); ("remarshal", "unmarshal", "mars
 
 (** And we finally register everything *)
 let () =
-  Driver.register_transformation "ppx_marshal" ~impl:visitor#structure
+  Driver.register_transformation "ppx_marshal" ~impl:visitor#structure ~intf:visitor#signature
     ~extensions:(loader::List.map build_encoder_ext efuns @ List.map build_converter_ext cfuns)
