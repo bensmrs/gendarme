@@ -119,8 +119,8 @@ let unmarshal : type a b. (module M with type t = a) -> ?v:a -> b ty -> b
   | Proxy { p_wit; p_put; _ }, _ -> M.unmarshal ?v p_wit |> p_put
   | Map (a, b), _ -> pair a b |> list |> M.unmarshal ?v
   | _, None -> default ty ()
-  | (Int | Float | String | List _ | Empty_list | Tuple2 _ | Tuple3 _ | Tuple4 _ | Tuple5 _
-    | Object _), _ -> raise Type_error
+  | (Int | Float | String | Bool | List _ | Option _ | Empty_list | Tuple2 _ | Tuple3 _ | Tuple4 _
+    | Tuple5 _ | Object _), _ -> raise Type_error
   | _, _ -> raise Unimplemented_case
 
 let assoc e ?v o =

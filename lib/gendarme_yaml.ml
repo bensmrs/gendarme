@@ -42,6 +42,8 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Bool, Some (`Bool b) -> b
     | List ty, Some (`A l) -> List.map (fun v -> unmarshal ~v ty) l
     | Empty_list, Some (`A []) -> []
+    | Option _, Some `Null -> None
+    | Option ty, Some v -> Some (unmarshal ~v ty)
     | Tuple2 (a, b), Some (`A [va; vb]) ->
         (unmarshal ~v:va a, unmarshal ~v:vb b)
     | Tuple3 (a, b, c), Some (`A [va; vb; vc]) ->

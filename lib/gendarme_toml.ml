@@ -93,6 +93,8 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Bool, Some (TBool b) -> b
     | List ty, Some (TArray a) -> unmarshal_list ~v:a ty
     | Empty_list, Some (TArray NodeEmpty) -> []
+    | Option _, Some (TArray NodeEmpty) -> None
+    | Option ty, Some (TArray a) -> Some (unmarshal_list ~v:a ty |> List.hd)
     | Tuple2 (a, b), Some (TArray (NodeArray [va; vb])) ->
         (* We are doing the reverse operation here *)
         (unmarshal_list ~v:va a |> List.hd, unmarshal_list ~v:vb b |> List.hd)

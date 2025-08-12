@@ -37,7 +37,9 @@ let test_simple_types_json () =
   let v = [%encode.Json] ~v:42 Gendarme.int in
   [%decode.Json] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
   check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
-  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int))
+  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int));
+  check (option int) "int option 1<" (Some 42) ([%decode.Json] ~v:"42" Gendarme.(option int));
+  check (option int) "int option 2<" None ([%decode.Json] ~v:"null" Gendarme.(option int))
 
 (** A few simple tests with TOML *)
 let test_simple_types_toml () =
@@ -56,7 +58,10 @@ let test_simple_types_toml () =
   [%decode.Toml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
   [%encode.Toml] ~v:(Some 42) Gendarme.(option int)
   |> check string "int option 1>" "__value = [42]\n";
-  check string "int option 2>" "__value = []\n" ([%encode.Toml] ~v:None Gendarme.(option int))
+  check string "int option 2>" "__value = []\n" ([%encode.Toml] ~v:None Gendarme.(option int));
+  [%decode.Toml] ~v:"__value = [42]" Gendarme.(option int)
+  |> check (option int) "int option 1<" (Some 42);
+  check (option int) "int option 2<" None ([%decode.Toml] ~v:"__value=[]" Gendarme.(option int))
 
 (** A few simple tests with YAML *)
 let test_simple_types_yaml () =
@@ -72,7 +77,9 @@ let test_simple_types_yaml () =
   let v = [%encode.Yaml] ~v:42 Gendarme.int in
   [%decode.Yaml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
   check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
-  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int))
+  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int));
+  check (option int) "int option 1<" (Some 42) ([%decode.Yaml] ~v:"42" Gendarme.(option int));
+  check (option int) "int option 2<" None ([%decode.Yaml] ~v:"null" Gendarme.(option int))
 
 (** This module defines interesting cases to check record marshalling *)
 module M1 = struct
