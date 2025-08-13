@@ -15,12 +15,17 @@
  (description "This package provides common primitives to marshal OCaml data structures"))
 
 (package
- (name gendarme-json)
- (synopsis "Libraries to marshal OCaml data structures (JSON)")
- (description "This package allows to marshal OCaml data structures to JSON")
+ (name gendarme-ezjsonm)
+ (synopsis "Libraries to marshal OCaml data structures (JSON [Ezjsonm])")
+ (description "This package allows to marshal OCaml data structures to JSON using Ezjsonm")
  (depends
   (ppx_marshal_ext (= :version))
-  (yojson (>= 1.6.0))))
+  (ezjsonm (>= 1.1.0))))
+
+(package
+ (name gendarme-json)
+ (synopsis "Libraries to marshal OCaml data structures (JSON metapackage)")
+ (description "Metapackage for JSON marshalling using Gendarme"))
 
 (package
  (name gendarme-toml)
@@ -39,15 +44,24 @@
   (yaml (>= 3.0.1))))
 
 (package
+ (name gendarme-yojson)
+ (synopsis "Libraries to marshal OCaml data structures (JSON [Yojson])")
+ (description "This package allows to marshal OCaml data structures to JSON using Yojson")
+ (depends
+  (ppx_marshal_ext (= :version))
+  (yojson (>= 1.6.0))))
+
+(package
  (name ppx_marshal)
  (synopsis "Preprocessor extension to marshal OCaml types")
  (description "This package provides a preprocessor extension to automatically define marshallers for OCaml types")
  (depends
   (alcotest :with-test)
   (gendarme (= :version))
-  (gendarme-json (and (= :version) :with-test))
+  (gendarme-ezjsonm (and (= :version) :with-test))
   (gendarme-toml (and (= :version) :with-test))
   (gendarme-yaml (and (= :version) :with-test))
+  (gendarme-yojson (and (= :version) :with-test))
   (ocaml (>= 4.13.0))
   (ppxlib (and (>= 0.26.0) (< 0.36)))))
 

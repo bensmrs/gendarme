@@ -1,0 +1,6 @@
+(library
+ (name gendarme_ezjsonm)
+ (public_name gendarme-ezjsonm)
+ (wrapped false)
+ (libraries gendarme ezjsonm)
+ (preprocess (pps ppx_marshal_ext)))

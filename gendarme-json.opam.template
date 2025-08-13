@@ -1,0 +1,5 @@
+depends: [
+  ( "gendarme-ezjsonm" {= version} | "gendarme-yojson" {= version} )
+]
+build: []
+install: []

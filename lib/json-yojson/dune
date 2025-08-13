@@ -1,0 +1,6 @@
+(library
+ (name gendarme_yojson)
+ (public_name gendarme-yojson)
+ (wrapped false)
+ (libraries gendarme yojson)
+ (preprocess (pps ppx_marshal_ext)))

@@ -4,13 +4,6 @@
  (modules gendarme))
 
 (library
- (name gendarme_json)
- (public_name gendarme-json)
- (modules gendarme_json)
- (libraries gendarme yojson)
- (preprocess (pps ppx_marshal_ext)))
-
-(library
  (name gendarme_toml)
  (public_name gendarme-toml)
  (modules gendarme_toml)

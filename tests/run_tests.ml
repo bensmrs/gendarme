@@ -2,7 +2,19 @@
 
 open Alcotest
 
-[%%marshal.load Json; Toml; Yaml]
+(* Load TOML and YAML encoders *)
+[%%marshal.load Toml; Yaml]
+
+(** To be extra safe, we completely shadow Gendarme_json *)
+module Gendarme_json = struct end
+
+(** Because different implementations exist for JSON encoders, we handle them in a special way by
+    abusing the type system. We need to do it here, else the extensible variant cannot be properly
+    unified. *)
+module type JSON = sig include Gendarme.S module Prelude : sig type Gendarme.encoder += Json end end
+
+(** JSON implementations *)
+let json = [("Ezjsonm", (module Gendarme_ezjsonm : JSON)); ("Yojson", (module Gendarme_yojson))]
 
 (** These compile-time checks allow for easier debugging *)
 module _ = struct
@@ -23,8 +35,12 @@ module _ = struct
   type _t = t7
 end
 
+(** Modularize a test suite *)
+let modularize (suite, kind, f) =
+  List.map (fun (name, m) -> (suite ^ " (" ^ name ^ ")", kind, f m))
+
 (** A few simple tests with JSON *)
-let test_simple_types_json () =
+let test_simple_types_json (module Gendarme_json : JSON) () =
   check string "int>" "42" ([%encode.Json] ~v:42 Gendarme.int);
   check string "string>" "\"42\"" ([%encode.Json] ~v:"42" Gendarme.string);
   check string "bool>" "true" ([%encode.Json] ~v:true Gendarme.bool);
@@ -82,7 +98,8 @@ let test_simple_types_yaml () =
   check (option int) "int option 2<" None ([%decode.Yaml] ~v:"null" Gendarme.(option int))
 
 (** This module defines interesting cases to check record marshalling *)
-module M1 = struct
+module M1' (Gendarme_json : JSON) = struct
+  include Gendarme_json.Prelude
   type t1 = { t1_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"] } [@@marshal]
   let v1 = { t1_foo = 42 }
   type t2 = { t2_foo: int [@json "foo"]; t2_bar: float [@yaml "bar"];
@@ -99,8 +116,11 @@ module M1 = struct
   let v5 = { t5_foo = 42; t5_bar = (1, "bar") }
 end
 
+module M1 = M1' (Gendarme_yojson)
+
 (** A few record tests with JSON *)
-let test_records_json () =
+let test_records_json (module Gendarme_json : JSON) () =
+  let module M1 = M1' (Gendarme_json) in
   check string "t1>" "{\"foo\":42}" M1.([%encode.Json] ~v:v1 t1);
   check string "t2>" "{\"foo\":42}" M1.([%encode.Json] ~v:v2 t2);
   check string "t3>" "{\"foo\":42,\"bar\":1.1}" M1.([%encode.Json] ~v:v3 t3);
@@ -134,7 +154,9 @@ let test_records_yaml () =
 
 (** Test optional field name feature *)
 let test_no_field_name () =
+  let module Gendarme_json = Gendarme_yojson in
   let module M = struct
+    include Gendarme_json.Prelude
     type t = { foo: int [@json]; bar: string [@json] } [@@marshal]
     let v = { foo = 42; bar = "foo" }
   end in
@@ -142,7 +164,9 @@ let test_no_field_name () =
   check bool "t<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t = v)
 
 (** This module defines interesting cases to check variant marshalling *)
-module M2 = struct
+module M2' (Gendarme_json : JSON) = struct
+  include Gendarme_json.Prelude
+  module M1 = M1' (Gendarme_json)
   type t1 = Foo1 | Bar1 [@@marshal]
   let v1 = Foo1
   let v1' = Bar1
@@ -157,8 +181,11 @@ module M2 = struct
   let v4' = { foo4 = Bar2 (2, "foo") }
 end
 
+module M2 = M2' (Gendarme_yojson)
+
 (** A few variant tests with JSON *)
-let test_variants_json () =
+let test_variants_json (module Gendarme_json : JSON) () =
+  let module M2 = M2' (Gendarme_json) in
   check string "t1 1>" "\"Foo1\"" M2.([%encode.Json] ~v:v1 t1);
   check string "t1 2>" "\"Bar1\"" M2.([%encode.Json] ~v:v1' t1);
   check bool "t1 1<" true M2.([%decode.Json] ~v:"\"Foo1\"" t1 = v1);
@@ -237,7 +264,7 @@ end
 let seq_eq s s' = List.for_all2 (=) (List.of_seq s) (List.of_seq s')
 
 (** A few tests for the proxy feature with JSON *)
-let test_proxies_json () =
+let test_proxies_json (module Gendarme_json : JSON) () =
   check string "t1>" "[1,2,3,4,5]" M3.([%encode.Json] ~v:v1 t1);
   check bool "t1<" true M3.([%decode.Json] ~v:"[1,2,3,4,5]" t1 |> seq_eq v1);
   (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
@@ -284,7 +311,9 @@ let test_proxies_yaml () =
 
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
+  let module Gendarme_json = Gendarme_yojson in
   let module M = struct
+    include Gendarme_json.Prelude
     (** Recursive type *)
     type t = { t_foo: int list [@json "foo"] [@yaml "foo"];
                t_bar: t list [@json "bar"] [@yaml "bar"] } [@@marshal]
@@ -300,14 +329,18 @@ let test_transcode_json_yaml () =
 
 (** Test default value feature *)
 let test_default_values () =
+  let module Gendarme_json = Gendarme_yojson in
   let module M = struct
+    include Gendarme_json.Prelude
     type t = { t_foo: int [@json "foo"] [@default 42]; t_bar: string [@json "bar"] } [@@marshal]
   end in
   check bool "t<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t = { t_foo = 42; t_bar = "foo" })
 
 (** Test safe mode feature *)
 let test_safe_mode () =
+  let module Gendarme_json = Gendarme_yojson in
   let module M = struct
+    include Gendarme_json.Prelude
     type t1 = { t1_foo: int [@json "foo"] [@default 42];
                 t1_bar: string [@marshal.json "bar"] } [@@marshal]
     type t2 = { t2_foo: int [@json "foo"] [@default 42];
@@ -325,7 +358,9 @@ let test_safe_mode () =
 
 (** Test exceptions raised by [Gendarme] *)
 let test_exceptions () =
+  let module Gendarme_json = Gendarme_yojson in
   let module M = struct
+    include Gendarme_json.Prelude
     type _ Gendarme.t += Foo
     type t1 = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] } [@@marshal]
     type t2 = Foo [@@marshal]
@@ -344,26 +379,30 @@ let test_exceptions () =
   (fun () -> [%decode.Json] ~v:"{\"foo\": \"Foo\"}" M.t3 |> ignore)
   |> check_raises "unknown_alt_default" Gendarme.Unknown_alt_default
 
-(** Our test suite *)
-let tests = [
-  ("test_simple_types_json", `Quick, test_simple_types_json);
-  ("test_simple_types_toml", `Quick, test_simple_types_toml);
-  ("test_simple_types_yaml", `Quick, test_simple_types_yaml);
-  ("test_records_json", `Quick, test_records_json);
-  ("test_records_toml", `Quick, test_records_toml);
-  ("test_records_yaml", `Quick, test_records_yaml);
-  ("test_no_field_name", `Quick, test_no_field_name);
-  ("test_variants_json", `Quick, test_variants_json);
-  ("test_variants_toml", `Quick, test_variants_toml);
-  ("test_variants_yaml", `Quick, test_variants_yaml);
-  ("test_proxies_json", `Quick, test_proxies_json);
-  ("test_proxies_toml", `Quick, test_proxies_toml);
-  ("test_proxies_yaml", `Quick, test_proxies_yaml);
-  ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
-  ("test_default_values", `Quick, test_default_values);
-  ("test_safe_mode", `Quick, test_safe_mode);
-  ("test_exceptions", `Quick, test_exceptions)
-]
-
 (** Run the test suite *)
-let () = run "ppx_marshal" [("marshal", tests)]
+let () =
+  run "ppx_marshal" [
+    ("simple types",
+      modularize ("test_simple_types_json", `Quick, test_simple_types_json) json @
+      [("test_simple_types_toml", `Quick, test_simple_types_toml);
+       ("test_simple_types_yaml", `Quick, test_simple_types_yaml)]);
+    ("records",
+      modularize ("test_records_json", `Quick, test_records_json) json @
+      [("test_records_toml", `Quick, test_records_toml);
+       ("test_records_yaml", `Quick, test_records_yaml)]);
+    ("variants",
+      modularize ("test_variants_json", `Quick, test_variants_json) json @
+      [("test_variants_toml", `Quick, test_variants_toml);
+       ("test_variants_yaml", `Quick, test_variants_yaml)]);
+    ("proxies",
+      modularize ("test_proxies_json", `Quick, test_proxies_json) json @
+      [("test_proxies_toml", `Quick, test_proxies_toml);
+       ("test_proxies_yaml", `Quick, test_proxies_yaml)]);
+    ("misc", [
+      ("test_no_field_name", `Quick, test_no_field_name);
+      ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
+      ("test_default_values", `Quick, test_default_values);
+      ("test_safe_mode", `Quick, test_safe_mode);
+      ("test_exceptions", `Quick, test_exceptions)
+    ])
+  ]
