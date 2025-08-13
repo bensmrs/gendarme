@@ -76,8 +76,8 @@ let test_simple_types_yaml () =
   check (list string) "empty list 2<" [] ([%decode.Yaml] ~v:"[]" Gendarme.(empty_list));
   let v = [%encode.Yaml] ~v:42 Gendarme.int in
   [%decode.Yaml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
-  check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
-  check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int));
+  check string "int option 1>" "42\n" ([%encode.Yaml] ~v:(Some 42) Gendarme.(option int));
+  check string "int option 2>" "\n" ([%encode.Yaml] ~v:None Gendarme.(option int));
   check (option int) "int option 1<" (Some 42) ([%decode.Yaml] ~v:"42" Gendarme.(option int));
   check (option int) "int option 2<" None ([%decode.Yaml] ~v:"null" Gendarme.(option int))
 
