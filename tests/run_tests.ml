@@ -228,8 +228,8 @@ module M3 = struct
   let v2 = Hashtbl.of_seq s2
   (* Most marshallers don’t really have an equivalent for non-string-keyed maps *)
   type t3 = (float, int) Hashtbl.t [@@marshal]
-  let s3 = Seq.(cons (1., 42) empty |> cons (2.5, 12))
-  let s3' = Seq.(cons (2.5, 12) empty |> cons (1., 42))
+  let s3 = Seq.(cons (1.1, 42) empty |> cons (2.5, 12))
+  let s3' = Seq.(cons (2.5, 12) empty |> cons (1.1, 42))
   let v3 = Hashtbl.of_seq s3
 end
 
@@ -246,8 +246,8 @@ let test_proxies_json () =
   check bool "t2>" true M3.(let s = [%encode.Json] ~v:v2 t2 in s = json || s = json');
   let s = M3.([%decode.Json] ~v:json t2 |> Hashtbl.to_seq) in
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
-  let json = "[[1.0,42],[2.5,12]]" in
-  let json' = "[[2.5,12],[1.0,42]]" in
+  let json = "[[1.1,42],[2.5,12]]" in
+  let json' = "[[2.5,12],[1.1,42]]" in
   check bool "t3>" true M3.(let s = [%encode.Json] ~v:v3 t3 in s = json || s = json');
   let s = M3.([%decode.Json] ~v:json t3 |> Hashtbl.to_seq) in
   check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
@@ -276,8 +276,8 @@ let test_proxies_yaml () =
   check bool "t2>" true M3.(let s = [%encode.Yaml] ~v:v2 t2 in s = yaml || s = yaml');
   let s = M3.([%decode.Yaml] ~v:yaml t2 |> Hashtbl.to_seq) in
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
-  let yaml = "- - 1\n  - 42\n- - 2.5\n  - 12\n" in
-  let yaml' = "- - 2.5\n  - 12\n- - 1\n  - 42\n" in
+  let yaml = "- - 1.1\n  - 42\n- - 2.5\n  - 12\n" in
+  let yaml' = "- - 2.5\n  - 12\n- - 1.1\n  - 42\n" in
   check bool "t3>" true M3.(let s = [%encode.Yaml] ~v:v3 t3 in s = yaml || s = yaml');
   let s = M3.([%decode.Yaml] ~v:yaml t3 |> Hashtbl.to_seq) in
   check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
