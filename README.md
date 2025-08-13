@@ -8,7 +8,7 @@ The library was originally named `Marshal`, but the author figured a bit late th
 ### Introductory example
 
 ```ocaml
-[%%marshal.load Json; Yaml]
+[%%marshal.load Yojson; Yaml]
 
 type t = { t_foo: int list [@json "foo"] [@yaml "foo"];
            t_bar: t list [@json "bar"] } [@@marshal]
@@ -57,9 +57,10 @@ For now, `Gendarme` can encode data in the following formats:
 
 | Format | Library | Internal type | Remarks |
 |---|---|---|---|
-| JSON | Yojson | `Yojson.Safe.t` |
-| TOML | Toml | `Toml.Types.value` | Limited support due to problems within the Toml library. Non-record values are wrapped to conform to TOML.
-| YAML | Yaml | `Yaml.value` |
+| JSON | [Ezjsonm](https://opam.ocaml.org/packages/ezjsonm/) | `Ezjsonm.value`
+|| [Yojson](https://opam.ocaml.org/packages/yojson/) | `Yojson.Safe.t` |
+| TOML | [toml](https://opam.ocaml.org/packages/toml/) | `Toml.Types.value` | Limited support due to problems within the Toml library. Non-record values are wrapped to conform to TOML.
+| YAML | [Yaml](https://opam.ocaml.org/packages/yaml/) | `Yaml.value` |
 
 ## Usage
 
@@ -90,11 +91,13 @@ val baz : unit -> (string * foo) list Gendarme.t = <fun>
 
 ### Loading encoders
 
-`Gendarme` works with extensible types, so your code needs to declare which encoders you intend to use before you can actually use them. To load both JSON and YAML encoders, simply add to your code:
+`Gendarme` works with extensible types, so your code needs to declare which encoders you intend to use before you can actually use them. To load both JSON (via Yojson) and YAML encoders, simply add to your code:
 
 ```ocaml
-[%%marshal.load Json; Yaml]
+[%%marshal.load Yojson; Yaml]
 ```
+
+Mixing several implementations of the same data format (e.g. Ezjsonm + Yojson) is not recommended.
 
 ### Marshalling
 
@@ -104,6 +107,8 @@ Then, marshalling (resp. encoding) a value to the encoder’s internal type (res
 let json = [%marshal.Json] ~v:("foo", 42) bar
 val json : Gendarme_json.t = `List [`String "foo"; `Int 42]
 ```
+
+Note that both `[%marshal.Json]` and `[%marshal.Yojson]` work here. However, we are encouraging users to abstract from the implementation as much as possible and refer to the data format instead of its implementation library.
 
 ### Unmarshalling
 
@@ -129,7 +134,7 @@ val yaml : Yaml.value = `A [`String "foo"; `Float 42.]
 
 #### Record types
 
-Record types are handled on a per-field basis: individual fields are optionally marked with how they should be marshalled, for each encoder the user wants to use, *à la* Go:
+Record types are handled on a per-field basis: individual fields are optionally marked with how they should be marshalled, for each data format the user wants to use, *à la* Go:
 
 ```ocaml
 type t = { foo: int [@json] [@yaml "f"] [@default 42];
@@ -140,6 +145,8 @@ This example means:
 
 * Marshal the `foo` field in JSON without any change (with a `foo` key), and in YAML by naming it `f`; additionally, if the field is missing when unmarshalling, it should take the value `42`;
 * Marshal the `bar` field in JSON by naming it `b`, and do not marshal it in YAML; additionally, if the field is missing when unmarshalling, it should take the type’s zero-value (here, `""`).
+
+Here, we are very strict in referring to the data format and not the implementation library (*i.e.* we support `[@json]` but not `[@yojson]`).
 
 #### Recursive types
 
@@ -190,17 +197,17 @@ When writing a new encoder, you need two things:
 * A name for your encoder, representing the target data structure
 * The internal type of your target data structure
 
-To work with `ppx_marshal`, encoder modules must be named `Gendarme_<encoder name>`. The author would appreciate PRs to add new encoders to the codebase, so that everything is gathered in a single repository.
+To work with `ppx_marshal`, encoder modules must be named `Gendarme_<lowercase encoder name>`. The author would appreciate PRs to add new encoders to the codebase, so that everything is gathered in a single repository.
 
 #### Encoder signature
 
 After including the `ppx_marshal_ext` library in your `dune` file, writing the encoder signature is very simple:
 
 ```ocaml
-[%%target.<encoder name> <internal type>]
+[%%target.<capitalized data type> <internal type>]
 ```
 
-For example, the JSON encoder has the following signature:
+For example, the Yojson JSON encoder has the following signature:
 
 ```ocaml
 [%%target.Json Yojson.Safe.t]
