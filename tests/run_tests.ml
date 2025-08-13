@@ -253,11 +253,16 @@ module M3 = struct
   let s2 = Seq.(cons ("foo", 42) empty |> cons ("bar", 12))
   let s2' = Seq.(cons ("bar", 12) empty |> cons ("foo", 42))
   let v2 = Hashtbl.of_seq s2
-  (* Most marshallers don’t really have an equivalent for non-string-keyed maps *)
+  (* Most marshallers don’t really have an equivalent for non-string-keyed maps. Still, we try our
+     best to coerce where it feels safe. *)
   type t3 = (float, int) Hashtbl.t [@@marshal]
   let s3 = Seq.(cons (1.1, 42) empty |> cons (2.5, 12))
   let s3' = Seq.(cons (2.5, 12) empty |> cons (1.1, 42))
   let v3 = Hashtbl.of_seq s3
+  type t4 = (int * int, int) Hashtbl.t [@@marshal]
+  let s4 = Seq.(cons ((1, 2), 3) empty |> cons ((4, 5), 6))
+  let s4' = Seq.(cons ((4, 5), 6) empty |> cons ((1, 2), 3))
+  let v4 = Hashtbl.of_seq s4
 end
 
 (** Check whether two seqs are equal *)
@@ -273,11 +278,16 @@ let test_proxies_json (module Gendarme_json : JSON) () =
   check bool "t2>" true M3.(let s = [%encode.Json] ~v:v2 t2 in s = json || s = json');
   let s = M3.([%decode.Json] ~v:json t2 |> Hashtbl.to_seq) in
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
-  let json = "[[1.1,42],[2.5,12]]" in
-  let json' = "[[2.5,12],[1.1,42]]" in
+  let json = "{\"1.1\":42,\"2.5\":12}" in
+  let json' = "{\"2.5\":12,\"1.1\":42}" in
   check bool "t3>" true M3.(let s = [%encode.Json] ~v:v3 t3 in s = json || s = json');
   let s = M3.([%decode.Json] ~v:json t3 |> Hashtbl.to_seq) in
-  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
+  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3');
+  let json = "[[[1,2],3],[[4,5],6]]" in
+  let json' = "[[[4,5],6],[[1,2],3]]" in
+  check bool "t4>" true M3.(let s = [%encode.Json] ~v:v4 t4 in s = json || s = json');
+  let s = M3.([%decode.Json] ~v:json t4 |> Hashtbl.to_seq) in
+  check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
 (** A few tests for the proxy feature with TOML *)
 let test_proxies_toml () =
@@ -289,8 +299,12 @@ let test_proxies_toml () =
   check bool "t2>" true M3.(let s = [%encode.Toml] ~v:v2 t2 in s = toml || s = toml');
   let s = M3.([%decode.Toml] ~v:toml t2 |> Hashtbl.to_seq) in
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
-  (* An implementation bug in the Toml library prevents us to perform the [t3>] test *)
+  let toml = "\"1.1\" = 42\n\"2.5\" = 12\n" in
+  let toml' = "\"2.5\" = 12\n\"1.1\" = 42\n" in
+  check bool "t3>" true M3.(let s = [%encode.Toml] ~v:v3 t3 in s = toml || s = toml');
   (* An implementation bug in the Toml library prevents us to perform the [t3<] test *)
+  (* An implementation bug in the Toml library prevents us to perform the [t4>] test *)
+  (* An implementation bug in the Toml library prevents us to perform the [t4<] test *)
   ()
 
 (** A few tests for the proxy feature with YAML *)
@@ -303,11 +317,16 @@ let test_proxies_yaml () =
   check bool "t2>" true M3.(let s = [%encode.Yaml] ~v:v2 t2 in s = yaml || s = yaml');
   let s = M3.([%decode.Yaml] ~v:yaml t2 |> Hashtbl.to_seq) in
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
-  let yaml = "- - 1.1\n  - 42\n- - 2.5\n  - 12\n" in
-  let yaml' = "- - 2.5\n  - 12\n- - 1.1\n  - 42\n" in
+  let yaml = "\"1.1\": 42\n\"2.5\": 12\n" in
+  let yaml' = "\"2.5\": 12\n\"1.1\": 42\n" in
   check bool "t3>" true M3.(let s = [%encode.Yaml] ~v:v3 t3 in s = yaml || s = yaml');
   let s = M3.([%decode.Yaml] ~v:yaml t3 |> Hashtbl.to_seq) in
-  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
+  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3');
+  let yaml = "- - - 1\n    - 2\n  - 3\n- - - 4\n    - 5\n  - 6\n" in
+  let yaml' = "- - - 4\n    - 5\n  - 6\n- - - 1\n    - 2\n  - 3\n" in
+  check bool "t4>" true M3.(let s = [%encode.Yaml] ~v:v4 t4 in s = yaml || s = yaml');
+  let s = M3.([%decode.Yaml] ~v:yaml t4 |> Hashtbl.to_seq) in
+  check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =

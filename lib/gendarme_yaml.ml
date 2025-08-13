@@ -26,7 +26,10 @@ module rec M : Gendarme.M with type t = E.t = struct
         `A [marshal ~v:va a; marshal ~v:vb b; marshal ~v:vc c; marshal ~v:vd d; marshal ~v:ve e]
     | Object o -> `O (assoc t ?v o |> List.map (fun (k, v) -> (k, unpack v)))
     | Map (a, b) -> begin match a () with
+        | Int -> `O (get ?v ty |> List.map (fun (k, v) -> (Int.to_string k, marshal ~v b)))
+        | Float -> `O (get ?v ty |> List.map (fun (k, v) -> (Float.to_string k, marshal ~v b)))
         | String -> `O (get ?v ty |> List.map (fun (k, v) -> (k, marshal ~v b)))
+        | Bool -> `O (get ?v ty |> List.map (fun (k, v) -> (Bool.to_string k, marshal ~v b)))
         | _ -> pair a b |> list |> marshal ?v
       end
     | _ -> Gendarme.marshal (module M) ?v ty
@@ -55,7 +58,10 @@ module rec M : Gendarme.M with type t = E.t = struct
          unmarshal ~v:ve e)
     | Object o, Some (`O l) -> List.map (fun (k, v) -> (k, pack v)) l |> deassoc t o
     | Map (a, b), Some (`O l) -> begin match a () with
+        | Int -> List.map (fun (k, v) -> (int_of_string k, unmarshal ~v b)) l
+        | Float -> List.map (fun (k, v) -> (Float.of_string k, unmarshal ~v b)) l
         | String -> List.map (fun (k, v) -> (k, unmarshal ~v b)) l
+        | Bool -> List.map (fun (k, v) -> (bool_of_string k, unmarshal ~v b)) l
         | _ -> raise Unimplemented_case
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty

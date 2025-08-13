@@ -53,9 +53,24 @@ module rec M : Gendarme.M with type t = E.t = struct
                           |> List.map (fun (k, v) -> (Toml.Types.Table.Key.of_string k, unpack v))
                           |> List.to_seq |> Toml.Types.Table.of_seq)
     | Map (a, b) -> begin match a () with
+        | Int ->
+            TTable (get ty ?v
+                    |> List.map (fun (k, v) ->
+                         (Int.to_string k |> Toml.Types.Table.Key.of_string, marshal ~v b))
+                    |> List.to_seq |> Toml.Types.Table.of_seq)
+        | Float ->
+            TTable (get ty ?v
+                    |> List.map (fun (k, v) ->
+                         (Float.to_string k |> Toml.Types.Table.Key.of_string, marshal ~v b))
+                    |> List.to_seq |> Toml.Types.Table.of_seq)
         | String ->
             TTable (get ty ?v
                     |> List.map (fun (k, v) -> (Toml.Types.Table.Key.of_string k, marshal ~v b))
+                    |> List.to_seq |> Toml.Types.Table.of_seq)
+        | Bool ->
+            TTable (get ty ?v
+                    |> List.map (fun (k, v) ->
+                         (Bool.to_string k |> Toml.Types.Table.Key.of_string, marshal ~v b))
                     |> List.to_seq |> Toml.Types.Table.of_seq)
         | _ -> pair a b |> list |> marshal ?v
       end
@@ -112,9 +127,21 @@ module rec M : Gendarme.M with type t = E.t = struct
         Toml.Types.Table.bindings tb
         |> List.map (fun (k, v) -> (Toml.Types.Table.Key.to_string k, pack v)) |> deassoc t o
     | Map (a, b), Some (TTable tb) -> begin match a () with
+        | Int ->
+            Toml.Types.Table.bindings tb
+            |> List.map (fun (k, v) ->
+                 (Toml.Types.Table.Key.to_string k |> int_of_string, unmarshal ~v b))
+        | Float ->
+            Toml.Types.Table.bindings tb
+            |> List.map (fun (k, v) ->
+                 (Toml.Types.Table.Key.to_string k |> Float.of_string, unmarshal ~v b))
         | String ->
             Toml.Types.Table.bindings tb
             |> List.map (fun (k, v) -> (Toml.Types.Table.Key.to_string k, unmarshal ~v b))
+        | Bool ->
+            Toml.Types.Table.bindings tb
+            |> List.map (fun (k, v) ->
+                 (Toml.Types.Table.Key.to_string k |> bool_of_string, unmarshal ~v b))
         | _ -> raise Unimplemented_case
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty
