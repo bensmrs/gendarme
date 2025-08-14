@@ -4,6 +4,8 @@
 
 The library was originally named `Marshal`, but the author figured a bit late that a module of the same name was already in the standard library. “Gendarme” is one way to translate “Marshal” in French.
 
+Being a beta-grade library in active-when-the-author-needs-it-patched-for-his-other-projects development, several breaking changes may occur to Gendarme before version 1.0, but we try to make them as minimal as possible.
+
 ## Introduction
 ### Introductory example
 
