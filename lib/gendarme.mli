@@ -159,6 +159,9 @@ val tuple5: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> unit -> ('a * 'b * 'c *
 (** Alias for [tuple5] *)
 val quintuple: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> unit -> ('a * 'b * 'c * 'd * 'e) t
 
+(** [(key, value)] map witness builder *)
+val map: 'a ty -> 'b ty -> unit -> ('a * 'b) list t
+
 (** ['a Seq.t] alias *)
 type 'a seq = 'a Seq.t
 
