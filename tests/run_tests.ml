@@ -179,6 +179,9 @@ module M2' (Gendarme_json : JSON) = struct
   type t4 = { foo4: t2 [@json] [@yaml] [@toml] [@default Foo2] } [@@marshal]
   let v4 = { foo4 = Foo2 }
   let v4' = { foo4 = Bar2 (2, "foo") }
+  type t5 = Foo5 of M1.t1 | Bar5 of M1.t3 [@@marshal]
+  let v5 = Foo5 { t1_foo = 1 }
+  let v5' = Bar5 { t3_foo = 2; t3_bar = 3.1 }
 end
 
 module M2 = M2' (Gendarme_yojson)
@@ -202,7 +205,11 @@ let test_variants_json (module Gendarme_json : JSON) () =
   check string "t4 1>" "{\"foo4\":\"Foo2\"}" M2.([%encode.Json] ~v:v4 t4);
   check string "t4 2>" "{\"foo4\":[\"Bar2\",2,\"foo\"]}" M2.([%encode.Json] ~v:v4' t4);
   check bool "t4 1<" true M2.([%decode.Json] ~v:"{\"foo4\":\"Foo2\"}" t4 = v4);
-  check bool "t4 2<" true M2.([%decode.Json] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4')
+  check bool "t4 2<" true M2.([%decode.Json] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4');
+  check string "t5 1>" "[\"Foo5\",{\"foo\":1}]" M2.([%encode.Json] ~v:v5 t5);
+  check string "t5 2>" "[\"Bar5\",{\"foo\":2,\"bar\":3.1}]" M2.([%encode.Json] ~v:v5' t5);
+  check bool "t5 1<" true M2.([%decode.Json] ~v:"[\"Foo5\",{\"foo\":1}]" t5 = v5);
+  check bool "t5 2<" true M2.([%decode.Json] ~v:"[\"Bar5\",{\"foo\":2,\"bar\":3.1}]" t5 = v5')
 
 (** A few variant tests with TOML *)
 let test_variants_toml () =
@@ -224,6 +231,7 @@ let test_variants_toml () =
   check string "t4 2>" "foo4 = [[\"Bar2\"], [2], [\"foo\"]]\n" M2.([%encode.Toml] ~v:v4' t4);
   check bool "t4 1<" true M2.([%decode.Toml] ~v:"foo4=\"Foo2\"" t4 = v4);
   check bool "t4 2<" true M2.([%decode.Toml] ~v:"foo4=[[\"Bar2\"],[2],[\"foo\"]]" t4 = v4')
+  (* An implementation bug in the Toml library prevents us to perform the [t5] tests *)
 
 (** A few variant tests with YAML *)
 let test_variants_yaml () =
@@ -243,7 +251,11 @@ let test_variants_yaml () =
   check string "t4 1>" "foo4: Foo2\n" M2.([%encode.Yaml] ~v:v4 t4);
   check string "t4 2>" "foo4:\n- Bar2\n- 2\n- foo\n" M2.([%encode.Yaml] ~v:v4' t4);
   check bool "t4 1<" true M2.([%decode.Yaml] ~v:"{\"foo4\":\"Foo2\"}" t4 = v4);
-  check bool "t4 2<" true M2.([%decode.Yaml] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4')
+  check bool "t4 2<" true M2.([%decode.Yaml] ~v:"{\"foo4\":[\"Bar2\",2,\"foo\"]}" t4 = v4');
+  check string "t5 1>" "- Foo5\n- foo: 1\n" M2.([%encode.Yaml] ~v:v5 t5);
+  check string "t5 2>" "- Bar5\n- foo: 2\n  bar: 3.1\n" M2.([%encode.Yaml] ~v:v5' t5);
+  check bool "t5 1<" true M2.([%decode.Yaml] ~v:"- Foo5\n- foo: 1\n" t5 = v5);
+  check bool "t5 2<" true M2.([%decode.Yaml] ~v:"- Bar5\n- foo: 2\n  bar: 3.1\n" t5 = v5')
 
 (** This module defines interesting cases to check variant marshalling *)
 module M3 = struct
