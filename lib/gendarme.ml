@@ -1,5 +1,5 @@
 exception Unimplemented_case
-exception Unknown_field
+exception Unknown_field of string
 exception Type_error
 exception Unpack_error
 exception Unknown_alt_default

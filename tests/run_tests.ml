@@ -390,7 +390,7 @@ let test_exceptions () =
   (fun () -> [%encode.Json] ~v:0 (fun () -> M.Foo) |> ignore)
   |> check_raises "unimplemented_case" Gendarme.Unimplemented_case;
   (fun () -> [%decode.Json] ~v:"{\"baz\": 0}" M.t1 |> ignore)
-  |> check_raises "unknown_field" Gendarme.Unknown_field;
+  |> check_raises "unknown_field" (Gendarme.Unknown_field "baz");
   (fun () -> [%decode.Json] ~v:"\"0\"" Gendarme.int |> ignore)
   |> check_raises "type_error" Gendarme.Type_error;
   (fun () -> [%decode.Json] ~v:"\"Bar\"" M.t2 |> ignore)

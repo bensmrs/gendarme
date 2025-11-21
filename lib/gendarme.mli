@@ -4,7 +4,7 @@
 exception Unimplemented_case
 
 (** Exception raised when unmarshalling unknown record fields or variant cases *)
-exception Unknown_field
+exception Unknown_field of string
 
 (** Exception raised when unmarshalling data to the wrong type *)
 exception Type_error

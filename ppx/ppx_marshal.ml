@@ -46,8 +46,8 @@ let rec expr_of_core_type = function
 
 (** Wrap function cases *)
 let wrap_cases ~loc cases =
-  let rhs = apply ~loc (evar ~loc "raise") [construct_e ~loc "Unknown_field" []] in
-  case ~lhs:(ppat_any ~loc) ~guard ~rhs ::cases |> List.rev
+  let rhs = apply ~loc (evar ~loc "raise") [construct_e ~loc "Unknown_field" [evar ~loc "%v"]] in
+  case ~lhs:(ppat_tuple ~loc [ppat_any ~loc; pvar ~loc "%v"]) ~guard ~rhs ::cases |> List.rev
 
 (** Open a module in an expression *)
 let open_module ~loc m =
