@@ -155,12 +155,11 @@ let process_variant ctors =
         let rhs' = apply ~loc (evar ~loc "raise") [construct_e ~loc "Type_error" []] in
         let put' = pexp_match ~loc (apply_v ~loc (dot ~loc "%M" "unmarshal") (evar ~loc "%v") ty)
                      [case ~lhs ~guard ~rhs; case ~lhs:lhs' ~guard ~rhs:rhs'] in
+        let lhs = ppat_or ~loc (construct_p ~loc "Type_error" [])
+                               (construct_p ~loc "Unknown_field" [ppat_any ~loc]) in
         let put = match put with
-        | None -> Some put'
-        | Some put ->
-            let lhs = ppat_or ~loc (construct_p ~loc "Type_error" [])
-                                   (construct_p ~loc "Unknown_field" [ppat_any ~loc]) in
-            Some (pexp_try ~loc put' [case ~lhs ~guard ~rhs:put]) in
+        | None -> Some (pexp_try ~loc put' [case ~lhs ~guard ~rhs:rhs'])
+        | Some put -> Some (pexp_try ~loc put' [case ~lhs ~guard ~rhs:put]) in
 
         process_variant_rec (get'::get, put) tl in
   let (get, put) = process_variant_rec ([], None) ctors in
