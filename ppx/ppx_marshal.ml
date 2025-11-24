@@ -300,7 +300,8 @@ let build_loader ~loc:_ ~path:_ =
                          |> pmod_ident ~loc) ~loc ~override:Fresh |> pstr_open ~loc)::acc
   | { pexp_desc = Pexp_sequence (hd, tl); _ } ->
       build_loader_rec (build_loader_rec acc hd) tl
-  | _ -> failwith "???" in
+  | { pexp_loc = loc; _ } ->
+      serr ~loc (err "%%marshal.load") "requires a valid encoder expression"::acc in
   build_loader_rec []
 
 (** Declare [[%%marshal.load]] *)

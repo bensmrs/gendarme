@@ -59,13 +59,16 @@ let construct_p ~loc name =
     | l -> Some (ppat_tuple ~loc l) |> f
 
 (** Error generators *)
-let err ~loc = Location.error_extensionf ~loc "[%s] %s"
+let err = Location.error_extensionf "[%s] %s"
 let eerr f ~loc str = f ~loc str |> pexp_extension ~loc
-let err_ma ~loc = err ~loc "@@marshal"
+let err_ma = err "@@marshal"
 let eerr_ma = eerr err_ma
 let terr_ma ~loc str = err_ma ~loc str |> ptyp_extension ~loc
-let err_me ~loc = err ~loc "%marshal"
+let err_me = err "%marshal"
 let eerr_me = eerr err_me
+let serr f ~loc str =
+  let payload = f ~loc str in
+  pstr_extension ~loc payload []
 
 (** Build a list cons *)
 let cons ~loc hd tl = construct_e ~loc "::" [hd; tl]
