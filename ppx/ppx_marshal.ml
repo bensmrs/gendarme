@@ -4,14 +4,56 @@ open Ppxlib
 open Ast_builder.Default
 open Util
 
-(** Check if the current attribute list contains [marshal] and if safe mode is on *)
-let check_marshal_attr =
-  let rec check_marshal_attr_rec = function
-    | [] -> false, false
-    | hd::_ when hd.attr_name.txt = "marshal" -> true, false
-    | hd::_ when hd.attr_name.txt = "marshal.safe" -> true, true
-    | _::tl -> check_marshal_attr_rec tl in
-  check_marshal_attr_rec
+type marshal_args = { safe : bool; disallow_unknown_fields : bool }
+
+(** Check if the current attribute list contains [marshal] and parse its parameters *)
+let get_marshal_attr =
+  let default = { safe = false; disallow_unknown_fields = false } in
+
+  let put_arg v args = function
+    | { txt = Lident arg; loc } -> begin match arg with
+        | "safe" -> Ok { args with safe = v }
+        | "disallow_unknown_fields" -> Ok { args with disallow_unknown_fields = v }
+        | s -> Error (err_ma ~loc ("does not have a " ^ s ^ " option") |> ptyp_extension ~loc)
+      end
+    | { loc; _ } -> Error (err_ma ~loc ("cannot parse this option") |> ptyp_extension ~loc) in
+
+  let rec parse_record_item = function
+    | Error _ as e, _ -> e
+    | Ok args, (arg, { pexp_desc = Pexp_ident { txt; _ }; _ })::tl when arg.txt = txt ->
+        parse_record_item (put_arg true args arg, tl)
+    | Ok args, (arg, { pexp_desc = Pexp_construct ({ txt = Lident "true"; _ }, None); _ })::tl ->
+        parse_record_item (put_arg true args arg, tl)
+    | Ok args, (arg, { pexp_desc = Pexp_construct ({ txt = Lident "false"; _ }, None); _ })::tl ->
+        parse_record_item (put_arg false args arg, tl)
+    | Ok _ as o, [] -> o
+    | Ok _, (_, { pexp_loc = loc; _ })::_ ->
+        Error (err_ma ~loc ("expects a boolean literal or nothing") |> ptyp_extension ~loc) in
+
+  let parse_marshal_options args { attr_payload; attr_loc = loc; _ } =
+    let parse_err = Error (err_ma ~loc "cannot parse this configuration" |> ptyp_extension ~loc) in
+    let rec parse_marshal_options_rec args = function
+      | Pexp_ident arg -> put_arg true args arg
+      | Pexp_sequence ({ pexp_desc = Pexp_ident arg; _ }, e) ->
+          begin match put_arg true args arg with
+          | Ok args -> parse_marshal_options_rec args e.pexp_desc
+          | e -> e
+          end
+      | Pexp_record (l, None) -> parse_record_item (Ok args, l)
+      | _ -> parse_err in
+    match attr_payload with
+    | PStr [] -> Ok args
+    | PStr ({ pstr_desc = Pstr_eval ({ pexp_desc; _ }, _); _ }::[]) ->
+        parse_marshal_options_rec args pexp_desc
+    | _ -> parse_err in
+
+  let rec get_marshal_attr_rec = function
+    | [] -> false, Ok default
+    | hd::_ when hd.attr_name.txt = "marshal" -> true, parse_marshal_options default hd
+    | hd::_ when hd.attr_name.txt = "marshal.safe" ->
+        true, parse_marshal_options { default with safe = true } hd
+    | _::tl -> get_marshal_attr_rec tl in
+  get_marshal_attr_rec
 
 (** Remove [marshal] from the list of attributes *)
 let remove_marshal_attr =
@@ -44,23 +86,32 @@ let rec expr_of_core_type = function
       eerr_ma ~loc "cannot marshal extension nodes"
   | { ptyp_loc = loc; _ } -> eerr_ma ~loc "does not know what to do with this"
 
-(** Wrap function cases *)
-let wrap_cases ~loc cases =
-  let rhs = apply ~loc (evar ~loc "raise") [construct_e ~loc "Unknown_field" [evar ~loc "%v"]] in
+(** Wrap get cases *)
+let wrap_get ~loc cases =
+  let rhs = raise_ ~loc "Unknown_field" [evar ~loc "%v"] in
   case ~lhs:(ppat_tuple ~loc [ppat_any ~loc; pvar ~loc "%v"]) ~guard ~rhs ::cases |> List.rev
+
+(** Wrap put cases *)
+let wrap_put ~loc ~args cases =
+  let (lhs, rhs) = match args.disallow_unknown_fields with
+    | true ->
+        (ppat_tuple ~loc [ppat_any ~loc; pvar ~loc "%v"],
+         raise_ ~loc "Unknown_field" [evar ~loc "%v"])
+    | false -> (ppat_tuple ~loc [ppat_any ~loc; ppat_any ~loc], evar ~loc "_%r") in
+  case ~lhs ~guard ~rhs ::cases |> List.rev
 
 (** Open a module in an expression *)
 let open_module ~loc m =
   open_infos ~expr:(Loc.make ~loc m |> pmod_ident ~loc) ~loc ~override:Fresh |> pexp_open ~loc
 
 (** Process attributes in record fields *)
-let process_record_attrs ~safe field ty base_record =
+let process_record_attrs ~args field ty base_record =
   let rec process_record_attrs_rec (fds, get, put, def, attrs as acc) = function
     | [] -> acc
-    | attr::tl when not (String.starts_with ~prefix:"marshal." attr.attr_name.txt) && safe ->
+    | attr::tl when not (String.starts_with ~prefix:"marshal." attr.attr_name.txt) && args.safe ->
         process_record_attrs_rec acc tl
     | { attr_payload = PStr [{ pstr_desc = Pstr_eval (e, _); _ }]; attr_name; attr_loc; _ }::tl
-      when attr_name.txt = "default" && not safe || attr_name.txt = "marshal.default" ->
+      when attr_name.txt = "default" && not args.safe || attr_name.txt = "marshal.default" ->
         let attrs = match def with
           | Some _ ->
               warn ~loc:attr_loc
@@ -68,7 +119,7 @@ let process_record_attrs ~safe field ty base_record =
           | None -> attrs in
         process_record_attrs_rec (fds, get, put, Some e, attrs) tl
     | { attr_payload = PStr l; attr_name; attr_loc = loc; _ }::tl
-      when String.starts_with ~prefix:"marshal." attr_name.txt || not safe ->
+      when String.starts_with ~prefix:"marshal." attr_name.txt || not args.safe ->
         let attr = match String.split_on_char '.' attr_name.txt with
           | "marshal"::tl -> tl
           | l -> l in
@@ -100,7 +151,7 @@ let process_record_attrs ~safe field ty base_record =
           | [] -> process_payload (Pconst_string (field.txt, field.loc, None)) field.loc
           | [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_constant a_cst; pexp_loc; _ }, _);
                _ }] -> process_payload a_cst pexp_loc
-          | _ when safe ->
+          | _ when args.safe ->
               let msg = "does not know how to parse this attribute" in
               (cons ~loc (eerr_ma ~loc msg) fds, get, put, def, attrs)
           | _ ->
@@ -115,13 +166,13 @@ let process_record_attrs ~safe field ty base_record =
   process_record_attrs_rec
 
 (** Process record fields *)
-let process_record ~loc ~safe base_record =
+let process_record ~loc ~args base_record =
   let rec process_record_rec (fds, get, put, def, records as acc) = function
     | [] -> acc
     | { pld_name; pld_type; pld_attributes = attrs; _ } as record::tl ->
         let ty = expr_of_core_type pld_type |> wrap ~loc in
         let (fds, get, put, def_v, attrs) =
-          process_record_attrs ~safe pld_name ty base_record (fds, get, put, None, []) attrs in
+          process_record_attrs ~args pld_name ty base_record (fds, get, put, None, []) attrs in
         let pld_attributes = List.rev attrs in
         let def' = match def_v with
           | Some d -> (lident_t' pld_name, d)
@@ -163,7 +214,7 @@ let process_variant ctors =
           | _ -> ppat_tuple ~loc (ctor_pat::pat_vars) in
         let rhs = construct_e ~loc:pcd_name.loc pcd_name.txt exp_vars in
         let lhs' = ppat_any ~loc in
-        let rhs' = apply ~loc (evar ~loc "raise") [construct_e ~loc "Type_error" []] in
+        let rhs' = raise_ ~loc "Type_error" [] in
         let put' = pexp_match ~loc (apply_v ~loc (dot ~loc ["%M"; "unmarshal"]) (evar ~loc "%v") ty)
                      [case ~lhs ~guard ~rhs; case ~lhs:lhs' ~guard ~rhs:rhs'] in
         let lhs = ppat_or ~loc (construct_p ~loc "Type_error" [])
@@ -177,14 +228,17 @@ let process_variant ctors =
   (get, Option.get put)
 
 (** Process type declarations in implementations *)
-let process_decl ({ ptype_attributes; _ } as decl) =
-  let has_marshal, safe = check_marshal_attr ptype_attributes in
-  match decl with
-  | _ when not has_marshal -> decl, []
-  | { ptype_kind = Ptype_abstract; ptype_manifest = None; ptype_loc = loc; _ } ->
+let process_decl ({ ptype_attributes; ptype_loc = loc; _ } as decl) =
+  let has_marshal, args = get_marshal_attr ptype_attributes in
+  match args, decl with
+  | Error e, _ ->
+      (type_declaration ~loc ~name:(Loc.make ~loc "%err") ~params:[] ~cstrs:[] ~kind:Ptype_abstract
+                        ~private_:Public ~manifest:(Some e), [])
+  | _, _ when not has_marshal -> (decl, [])
+  | _, { ptype_kind = Ptype_abstract; ptype_manifest = None; _ } ->
       let ptype_manifest = Some (terr_ma ~loc "cannot marshal abstract types" ) in
       ({ decl with ptype_manifest }, [])
-  | { ptype_name; ptype_loc = loc; ptype_manifest; ptype_kind; ptype_attributes; _ } as decl ->
+  | Ok args, ({ ptype_name; ptype_manifest; ptype_kind; ptype_attributes; _ } as decl) ->
       let decl = { decl with ptype_attributes = remove_marshal_attr ptype_attributes } in
       let (decl, expr) = match ptype_kind with
         | Ptype_variant [] -> (decl, eerr_ma ~loc "cannot marshal empty variant types")
@@ -201,12 +255,11 @@ let process_decl ({ ptype_attributes; _ } as decl) =
         | Ptype_abstract -> (decl, Option.get ptype_manifest |> expr_of_core_type)
         | Ptype_record l ->
             let base_record = if List.length l = 1 then None else Some (evar ~loc "_%r") in
-            let (fds, get, put, def, l) = List.rev l |> process_record ~loc ~safe base_record in
+            let (fds, get, put, def, l) = List.rev l |> process_record ~loc ~args base_record in
             let obj = construct_e ~loc "Object" [pexp_record ~loc
               [(lident_t ~loc "o_fds", fds);
-               (lident_t ~loc "o_get", wrap_cases ~loc get |> pexp_function ~loc
-                                                           |> fun_ ~loc "_%r");
-               (lident_t ~loc "o_put", wrap_cases ~loc put |> pexp_match ~loc (evar ~loc "%k")
+               (lident_t ~loc "o_get", wrap_get ~loc get |> pexp_function ~loc |> fun_ ~loc "_%r");
+               (lident_t ~loc "o_put", wrap_put ~loc ~args put |> pexp_match ~loc (evar ~loc "%k")
                                        |> fun_ ~loc "_%v" |> fun_ ~loc "%k" |> fun_ ~loc "_%r");
                (lident_t ~loc "o_def", pexp_record ~loc def None)] None] in
             let ptype_attributes = match get with
@@ -224,7 +277,7 @@ let process_decl ({ ptype_attributes; _ } as decl) =
 
 (** Process type declarations in interfaces *)
 let process_decl' ({ ptype_attributes; _ } as decl) =
-  let has_marshal, _ = check_marshal_attr ptype_attributes in
+  let has_marshal, _ = get_marshal_attr ptype_attributes in
   match decl with
   | _ when not has_marshal -> decl, []
   | { ptype_name = name; ptype_loc = loc; ptype_attributes; _ } as decl ->

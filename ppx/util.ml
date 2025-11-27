@@ -98,3 +98,6 @@ let let' ~loc flag pat expr = pexp_let ~loc flag [value_binding ~loc ~pat ~expr]
 
 (** Default guard *)
 let guard = None
+
+(** Generate a raise expression *)
+let raise_ ~loc name args = apply ~loc (evar ~loc "raise") [construct_e ~loc name args]

@@ -575,17 +575,33 @@ let test_safe_mode () =
     include Gendarme_json.Prelude
     type t1 = { t1_foo: int [@json "foo"] [@default 42];
                 t1_bar: string [@marshal.json "bar"] } [@@marshal]
+    type t1' = { t1'_foo: int [@json "foo"] [@default 42];
+                 t1'_bar: string [@marshal.json "bar"] } [@@marshal { safe = false }]
     type t2 = { t2_foo: int [@json "foo"] [@default 42];
                 t2_bar: string [@marshal.json "bar"] } [@@marshal.safe]
+    type t2' = { t2'_foo: int [@json "foo"] [@default 42];
+                 t2'_bar: string [@marshal.json "bar"] } [@@marshal safe]
+    type t2'' = { t2''_foo: int [@json "foo"] [@default 42];
+                  t2''_bar: string [@marshal.json "bar"] } [@@marshal { safe }]
+    type t2''' = { t2'''_foo: int [@json "foo"] [@default 42];
+                   t2'''_bar: string [@marshal.json "bar"] } [@@marshal { safe = true }]
     type t3 = { t3_foo: int [@marshal.json "foo"] [@marshal.default 42];
                 t3_bar: string [@marshal.json "bar"] } [@@marshal.safe]
     let v1 = { t1_foo = 42; t1_bar = "foo" }
+    let v1' = { t1'_foo = 42; t1'_bar = "foo" }
     let v2 = { t2_foo = 0; t2_bar = "foo" }
+    let v2' = { t2'_foo = 0; t2'_bar = "foo" }
+    let v2'' = { t2''_foo = 0; t2''_bar = "foo" }
+    let v2''' = { t2'''_foo = 0; t2'''_bar = "foo" }
     let v3 = { t3_foo = 42; t3_bar = "foo" }
   end in
   check bool "t1<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t1 = v1);
+  check bool "t1'<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t1' = v1');
   (* Safe mode ignores unprefixed attributes *)
   check bool "t2<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2 = v2);
+  check bool "t2'<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2' = v2');
+  check bool "t2''<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2'' = v2'');
+  check bool "t2'''<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2''' = v2''');
   check bool "t3<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t3 = v3)
 
 (** Test exceptions raised by [Gendarme] *)
@@ -594,7 +610,9 @@ let test_exceptions () =
   let module M = struct
     include Gendarme_json.Prelude
     type _ Gendarme.t += Foo
-    type t1 = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] } [@@marshal]
+    type t1 = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] }
+              [@@marshal disallow_unknown_fields]
+    type t1' = { t1_foo: int [@json "foo"]; t1_bar: string [@json "bar"] } [@@marshal]
     type t2 = Foo [@@marshal]
     type t3 = { t3_foo: t2 [@json "foo"] } [@@marshal]
     type t4 = Bar of t1 [@@marshal]
@@ -605,6 +623,7 @@ let test_exceptions () =
   |> check_raises "unimplemented_case" Gendarme.Unimplemented_case;
   (fun () -> [%decode.Json] ~v:"{\"baz\": 0}" M.t1 |> ignore)
   |> check_raises "unknown_field" (Gendarme.Unknown_field "baz");
+  check unit "unknown_field" () ([%decode.Json] ~v:"{\"baz\": 0}" M.t1' |> ignore);
   (fun () -> [%decode.Json] ~v:"\"0\"" Gendarme.int |> ignore)
   |> check_raises "type_error" Gendarme.Type_error;
   (fun () -> [%decode.Json] ~v:"\"Bar\"" M.t2 |> ignore)
@@ -639,11 +658,13 @@ let () =
       modularize ("test_proxies_json", `Quick, test_proxies_json) json @
       [("test_proxies_toml", `Quick, test_proxies_toml);
        ("test_proxies_yaml", `Quick, test_proxies_yaml)]);
-    ("misc", [
+    ("features", [
       ("test_no_field_name", `Quick, test_no_field_name);
-      ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
       ("test_default_values", `Quick, test_default_values);
       ("test_safe_mode", `Quick, test_safe_mode);
+    ]);
+    ("misc", [
+      ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
       ("test_exceptions", `Quick, test_exceptions)
     ])
   ]
