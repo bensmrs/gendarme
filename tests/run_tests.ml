@@ -55,7 +55,19 @@ let test_simple_types_json (module Gendarme_json : JSON) () =
   check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
   check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int));
   check (option int) "int option 1<" (Some 42) ([%decode.Json] ~v:"42" Gendarme.(option int));
-  check (option int) "int option 2<" None ([%decode.Json] ~v:"null" Gendarme.(option int))
+  check (option int) "int option 2<" None ([%decode.Json] ~v:"null" Gendarme.(option int));
+  [%encode.Json] ~v:(1, "b", 3) Gendarme.(triple int string int)
+  |> check string "int * string * int>" "[1,\"b\",3]";
+  [%decode.Json] ~v:"[1,\"b\",3]" Gendarme.(triple int string int)
+  |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  [%encode.Json] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 1>" "[[42,\"foo\"],[123,\"bar\"]]";
+  [%decode.Json] ~v:"[[42,\"foo\"],[123,\"bar\"]]" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
+  [%encode.Json] ~v:[] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 2>" "[]";
+  [%decode.Json] ~v:"[]" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** A few simple tests with TOML *)
 let test_simple_types_toml () =
@@ -77,7 +89,21 @@ let test_simple_types_toml () =
   check string "int option 2>" "__value = []\n" ([%encode.Toml] ~v:None Gendarme.(option int));
   [%decode.Toml] ~v:"__value = [42]" Gendarme.(option int)
   |> check (option int) "int option 1<" (Some 42);
-  check (option int) "int option 2<" None ([%decode.Toml] ~v:"__value=[]" Gendarme.(option int))
+  check (option int) "int option 2<" None ([%decode.Toml] ~v:"__value=[]" Gendarme.(option int));
+  (* The tuple tests are unfortunately subject to the TOML module’s limitations *)
+  [%encode.Toml] ~v:(1, "b", 3) Gendarme.(triple int string int)
+  |> check string "int * string * int>" "__value = [[1], [\"b\"], [3]]\n";
+  [%decode.Toml] ~v:"__value = [[1],[\"b\"],[3]]" Gendarme.(triple int string int)
+  |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  [%encode.Toml] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 1>" "__value = [[[42], [\"foo\"]], [[123], [\"bar\"]]]\n";
+  Gendarme.(pair int string |> list)
+  |> [%decode.Toml] ~v:"__value = [[[42],[\"foo\"]],[[123],[\"bar\"]]]"
+  |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
+  [%encode.Toml] ~v:[] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 2>" "__value = []\n";
+  [%decode.Toml] ~v:"__value = []" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** A few simple tests with YAML *)
 let test_simple_types_yaml () =
@@ -95,7 +121,19 @@ let test_simple_types_yaml () =
   check string "int option 1>" "42\n" ([%encode.Yaml] ~v:(Some 42) Gendarme.(option int));
   check string "int option 2>" "\n" ([%encode.Yaml] ~v:None Gendarme.(option int));
   check (option int) "int option 1<" (Some 42) ([%decode.Yaml] ~v:"42" Gendarme.(option int));
-  check (option int) "int option 2<" None ([%decode.Yaml] ~v:"null" Gendarme.(option int))
+  check (option int) "int option 2<" None ([%decode.Yaml] ~v:"null" Gendarme.(option int));
+  [%encode.Yaml] ~v:(1, "b", 3) Gendarme.(triple int string int)
+  |> check string "int * string * int>" "- 1\n- b\n- 3\n";
+  [%decode.Yaml] ~v:"- 1\n- b\n- 3" Gendarme.(triple int string int)
+  |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  [%encode.Yaml] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 1>" "- - 42\n  - foo\n- - 123\n  - bar\n";
+  [%decode.Yaml] ~v:"- - 42\n  - foo\n- - 123\n  - bar" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
+  [%encode.Yaml] ~v:[] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 2>" "[]\n";
+  [%decode.Yaml] ~v:"[]" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** This module defines interesting cases to check record marshalling *)
 module M1' (Gendarme_json : JSON) = struct
@@ -114,6 +152,7 @@ module M1' (Gendarme_json : JSON) = struct
   type t5 = { t5_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
               t5_bar: int * string [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
   let v5 = { t5_foo = 42; t5_bar = (1, "bar") }
+  let v5' = { t5_foo = 123; t5_bar = (3, "baz") }
 end
 
 module M1 = M1' (Gendarme_yojson)
@@ -128,7 +167,12 @@ let test_records_json (module Gendarme_json : JSON) () =
   check string "t4>" "{\"foo\":42,\"bar\":{\"foo\":42}}" M1.([%encode.Json] ~v:v4 t4);
   check bool "t4<" true M1.([%decode.Json] ~v:"{\"foo\":42,\"bar\":{\"foo\":42}}" t4 = v4);
   check string "t5>" "{\"foo\":42,\"bar\":[1,\"bar\"]}" M1.([%encode.Json] ~v:v5 t5);
-  check bool "t5<" true M1.([%decode.Json] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5)
+  check bool "t5<" true M1.([%decode.Json] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5);
+  let json = "[{\"foo\":42,\"bar\":[1,\"bar\"]},{\"foo\":123,\"bar\":[3,\"baz\"]}]" in
+  check string "t5l>" json M1.([%encode.Json] ~v:[v5; v5'] (Gendarme.list t5));
+  check bool "t5l<" true M1.([%decode.Json] ~v:json (Gendarme.list t5) = [v5; v5']);
+  check string "t5l0>" "[]" M1.([%encode.Json] ~v:[] (Gendarme.list t5));
+  check bool "t5l0<" true M1.([%decode.Json] ~v:"[]" (Gendarme.list t5) = [])
 
 (** A few record tests with TOML *)
 let test_records_toml () =
@@ -139,7 +183,13 @@ let test_records_toml () =
   check string "t4>" "foo = 42\n[bar]\nfoo = 42\n" M1.([%encode.Toml] ~v:v4 t4);
   check bool "t4<" true M1.([%decode.Toml] ~v:"foo=42\n[bar]\nfoo=42" t4 = v4);
   check string "t5>" "bar = [[1], [\"bar\"]]\nfoo = 42\n" M1.([%encode.Toml] ~v:v5 t5);
-  check bool "t5<" true M1.([%decode.Toml] ~v:"bar=[[1],[\"bar\"]]\nfoo=42" t5 = v5)
+  check bool "t5<" true M1.([%decode.Toml] ~v:"bar=[[1],[\"bar\"]]\nfoo=42" t5 = v5);
+  let toml = "[[__value]]\nbar = [[1], [\"bar\"]]\nfoo = 42\n\
+              [[__value]]\nbar = [[3], [\"baz\"]]\nfoo = 123\n" in
+  check string "t5l>" toml M1.([%encode.Toml] ~v:[v5; v5'] (Gendarme.list t5));
+  check bool "t5l<" true M1.([%decode.Toml] ~v:toml (Gendarme.list t5) = [v5; v5']);
+  check string "t5l0>" "__value = []\n" M1.([%encode.Toml] ~v:[] (Gendarme.list t5));
+  check bool "t5l0<" true M1.([%decode.Toml] ~v:"__value = []" (Gendarme.list t5) = [])
 
 (** A few record tests with YAML *)
 let test_records_yaml () =
@@ -150,7 +200,12 @@ let test_records_yaml () =
   check string "t4>" "foo: 42\nbar:\n  foo: 42\n" M1.([%encode.Yaml] ~v:v4 t4);
   check bool "t4<" true M1.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":{\"foo\":42}}" t4 = v4);
   check string "t5>" "foo: 42\nbar:\n- 1\n- bar\n" M1.([%encode.Yaml] ~v:v5 t5);
-  check bool "t5<" true M1.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5)
+  check bool "t5<" true M1.([%decode.Yaml] ~v:"{\"foo\":42,\"bar\":[1,\"bar\"]}" t5 = v5);
+  let yaml = "- foo: 42\n  bar:\n  - 1\n  - bar\n- foo: 123\n  bar:\n  - 3\n  - baz\n" in
+  check string "t5l>" yaml M1.([%encode.Yaml] ~v:[v5; v5'] (Gendarme.list t5));
+  check bool "t5l<" true M1.([%decode.Yaml] ~v:yaml (Gendarme.list t5) = [v5; v5']);
+  check string "t5l0>" "[]\n" M1.([%encode.Yaml] ~v:[] (Gendarme.list t5));
+  check bool "t5l0<" true M1.([%decode.Yaml] ~v:"[]" (Gendarme.list t5) = [])
 
 (** Test optional field name feature *)
 let test_no_field_name () =
