@@ -11,14 +11,17 @@ module rec M : Gendarme.M with type t = E.t = struct
     | Float -> NodeFloat (get ?v ty)
     | String -> NodeString (get ?v ty)
     | Bool -> NodeBool (get ?v ty)
-    | List _ | Alt _ -> NodeArray (Option.fold ~none:[] ~some:(fun v -> v) v
-        |> List.map (fun v -> match marshal ~v a with
-             | TArray a -> a
-             | _ -> raise Unimplemented_case))
-    | Object _ -> NodeTable (Option.fold ~none:[] ~some:(fun v -> v) v
-        |> List.map (fun v -> match marshal ~v a with
+    | List _ | Alt _ | Tuple2 _ | Tuple3 _ | Tuple4 _ | Tuple5 _ -> NodeArray
+        (Option.fold ~none:[] ~some:(fun v -> v) v
+         |> List.map (fun v -> match marshal ~v a with
+              | TArray a -> a
+              | _ -> raise Unimplemented_case))
+    | Object _ -> begin match v with
+        | None | Some [] -> NodeEmpty (** This is necessary for some reason *)
+        | Some l -> NodeTable (List.map (fun v -> match marshal ~v a with
              | TTable a -> a
-             | _ -> raise Unimplemented_case))
+             | _ -> raise Unimplemented_case) l)
+      end
     | Empty_list -> (* Weird, but you asked for it… *)
         NodeArray (get ?v ty |> List.map (fun _ -> Toml.Types.NodeEmpty))
     | _ -> raise Unimplemented_case
@@ -90,8 +93,12 @@ module rec M : Gendarme.M with type t = E.t = struct
     | String, NodeBool l -> List.map Bool.to_string l
     | Bool, NodeBool l -> l
     | List a, NodeArray l -> List.map (fun v -> unmarshal_list ~v a) l
-    | Alt _, NodeArray l -> List.map (fun v -> unmarshal ~v:(TArray v) ty) l
+    | (Alt _ | Tuple2 _ | Tuple3 _ | Tuple4 _ | Tuple5 _), NodeArray l ->
+        List.map (fun v -> unmarshal ~v:(TArray v) ty) l
     | Empty_list, NodeArray l -> (* Again, weird… *) List.map (fun _ -> []) l
+    | Object o, NodeTable l -> List.map (fun v ->
+        Toml.Types.Table.bindings v
+        |> List.map (fun (k, v) -> (Toml.Types.Table.Key.to_string k, pack v)) |> deassoc t o) l
     | _, NodeEmpty -> []
     | _ -> raise Unimplemented_case
 
