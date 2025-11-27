@@ -46,6 +46,12 @@ module type M = sig
 
   (** Unmarshal a value *)
   val unmarshal: ?v:t -> 'a ty -> 'a
+
+  (** Marshal a value in an way safe for the encoder *)
+  val marshal_safe : ?v:'a -> 'a ty -> t
+
+  (** Unmarshal a value in a way safe for the encoder *)
+  val unmarshal_safe : ?v:t -> 'a ty -> 'a
 end
 
 (** Encoder signature *)
@@ -101,6 +107,12 @@ val marshal : (module M with type t = 'a) -> ?v:'b -> 'b ty -> 'a
 
 (** Fallback unmarshaller *)
 val unmarshal : (module M with type t = 'a) -> ?v:'a -> 'b ty -> 'b
+
+(** Fallback safe marshaller *)
+val marshal_safe : (module M with type t = 'a) -> ?v:'b -> 'b ty -> 'a
+
+(** Fallback safe unmarshaller *)
+val unmarshal_safe : (module M with type t = 'a) -> ?v:'a -> 'b ty -> 'b
 
 (** Helper function to simplify marshalling records *)
 val assoc: encoder -> ?v:'a -> 'a o_lens -> (string * target) list

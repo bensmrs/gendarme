@@ -13,7 +13,7 @@ let err' ~loc msg =
   [psig_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.target" msg) []]
 
 (** Rewrite the extension node to declare the encoder *)
-let process loc lid arg_loc arg =
+let process ~partial loc lid arg_loc arg =
   (* Helper functions *)
   let l x = Loc.make ~loc x in
   let al x = Loc.make ~loc:arg_loc x in
@@ -33,7 +33,13 @@ let process loc lid arg_loc arg =
   let kind = ekind [] in
   let path = d "Gendarme" "encoder" in
   let constructors = [extension_constructor ~loc ~name:(al arg) ~kind] in
-  let ext' = type_extension ~loc ~path ~params:[] ~constructors ~private_ |> pstr_typext ~loc in
+  let constructors = match partial with
+    | false -> constructors
+    | true ->
+        (* type Gendarme.encoder += Mod__ of Gendarme.encoder *)
+        let kind = ekind [ptyp_constr ~loc path []] in
+        extension_constructor ~loc ~name:(al (arg ^ "__")) ~kind :: constructors in
+  let ext' = text ~loc ~path ~constructors |> pstr_typext ~loc in
 
   (* type t = ty *)
   let decl = ptyp_constr ~loc lid [] |> tdecl ~loc ~name:(l "t") in
@@ -59,18 +65,47 @@ let process loc lid arg_loc arg =
   ] in
   let unpack_def = v [value_binding ~loc ~pat:(ppat_var ~loc (l "unpack")) ~expr] in
 
-  [ext; m ~loc "Prelude" [ext']; m ~loc "E" [t_def; t_def'; pack_def; unpack_def]]
+  let eexpr = [t_def; t_def'; pack_def; unpack_def] in
+  let eexpr = match partial with
+    | false -> eexpr
+    | true -> (* In this case, we add a functor Make so that our encoder functor can use it *)
+        (* type t = t *)
+        let decl = ptyp_constr ~loc (lident "t" |> l) [] |> tdecl ~loc ~name:(l "t") in
+        let t_def = pstr_type ~loc Nonrecursive [decl] in
+
+        (* let t = Mod__ %D.t *)
+        let expr = pexp_construct ~loc (d "Prelude" (arg ^ "__"))
+                                       (Some (d "%D" "t" |> pexp_ident ~loc)) in
+        let t_def' = v [value_binding ~loc ~pat ~expr] in
+
+        (* let pack = pack *)
+        let pack_def = alias ~loc "pack" "pack" in
+
+        (* let unpack = unpack *)
+        let unpack_def = alias ~loc "unpack" "unpack" in
+
+        let expr =
+          pmod_structure ~loc [t_def; t_def'; pack_def; unpack_def]
+          |> pmod_functor ~loc (Named (Some "%D" |> l, mtid ~loc "Gendarme" "S")) in
+
+        eexpr @ [module_binding ~loc ~name:(l (Some "Make")) ~expr |> pstr_module ~loc] in
+
+  [ext; m ~loc "Prelude" [ext']; m ~loc "E" eexpr]
 
 (** Handle PPX arguments *)
-let declare_target ~loc ~path:_ ~arg lid = match arg with
-  | Some ({ txt = Lident arg; loc = arg_loc }) -> process loc lid arg_loc arg
+let declare_target ~loc ~path:_ ~arg ~partial lid = match arg with
+  | Some ({ txt = Lident arg; loc = arg_loc }) -> process ~partial loc lid arg_loc arg
   | Some { loc; _ } -> err ~loc "expected a valid non-prefixed constructor"
   | None -> err ~loc "expected a constructor"
 
-(** Declare the extension *)
+(** Declare the extensions *)
 let declare_target_ext =
-  Extension.(declare_inline_with_path_arg "marshal.target" Context.structure_item)
-    Ast_pattern.(pstr (pstr_eval (pexp_ident __') nil ^:: nil)) declare_target
+  List.map
+    (fun (name, partial) ->
+       declare_target ~partial
+       |> Extension.(declare_inline_with_path_arg name Context.structure_item)
+            Ast_pattern.(pstr (pstr_eval (pexp_ident __') nil ^:: nil)))
+    [("marshal.target", false); ("marshal.partial_target", true)]
 
 (** Rewrite the extension node to declare the encoder signature *)
 let process' loc lid arg_loc arg =
@@ -96,42 +131,66 @@ let declare_target_ext' =
     Ast_pattern.(pstr (pstr_eval (pexp_ident __') nil ^:: nil)) declare_target'
 
 (** Handle PPX arguments *)
-let declare_encoder ~loc ~path:_ name str =
-  (* Mod => Mod : Gendarme.M with type t = E.t *)
-  let mty = (pmty_with ~loc (mtid ~loc "Gendarme" "M") [Pwith_type (
-    lident_t ~loc "t", ptyp_constr ~loc (ldot ~loc "E" "t") []
-    |> tdecl ~loc ~name:(Loc.make ~loc "t"))
-  ]) in
+let declare_encoder ~partial ~loc ~path:_ ~arg name str = match (partial, arg) with
+  | true, None ->
+      [pstr_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.partial_encoder"
+                                                           "expected an encoder argument") []]
+  | false, Some _ ->
+      [pstr_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.encoder"
+                                                           "does not expect any argument") []]
+  | _ ->
+      (* Mod => Mod : Gendarme.M with type t = E.t *)
+      let mty = (pmty_with ~loc (mtid ~loc "Gendarme" "M") [Pwith_type (
+        lident_t ~loc "t", ptyp_constr ~loc (ldot ~loc "E" "t") []
+        |> tdecl ~loc ~name:(Loc.make ~loc "t"))
+      ]) in
 
-  (* Extend the module structure *)
-  let str = pmod_structure ~loc:str.loc (
-    (* include E *)
-    include_ ~loc "E"::
+      let incl = match partial with
+        | true ->
+            let arg = Option.get arg in
+            pmod_apply ~loc (ldot ~loc "E" "Make" |> pmod_ident ~loc) (pmod_ident ~loc:arg.loc arg)
+            |> include_infos ~loc |> pstr_include ~loc
+        | false ->
+            (* include E *)
+            include_ ~loc "E" in
 
-    (* <module structure> *)
-    str.txt
-  ) in
+      let aliases = match partial with
+        | true -> []
+        | false ->
+            (* let marshal_safe = marshal *)
+            alias ~loc "marshal_safe" "marshal"::
 
-  let expr = pmod_constraint ~loc str mty in
+            (* let unmarshal_safe = unmarshal *)
+            alias ~loc "unmarshal_safe" "unmarshal"::[] in
 
-  [
-    (* module rec Mod : Gendarme.M with type t = E.t = struct ... end *)
-    pstr_recmodule ~loc [module_binding ~loc ~name:(Loc.make ~loc:name.loc (Some name.txt)) ~expr];
+      (* Extend the module structure *)
+      let str = pmod_structure ~loc:str.loc (incl::str.txt @ aliases) in
 
-    (* include E *)
-    include_ ~loc "E";
+      [
+        (* module rec Mod : Gendarme.M with type t = E.t = struct ... end *)
+        pstr_recmodule ~loc [module_binding ~loc ~name:(Loc.make ~loc:name.loc (Some name.txt))
+                                            ~expr:(pmod_constraint ~loc str mty)];
 
-    (* include Mod *)
-    include_ ~loc name.txt;
-  ]
+        (* include E *)
+        include_ ~loc "E";
+
+        (* include Mod *)
+        include_ ~loc name.txt;
+      ]
 
 (** Declare module%marshal.encoder *)
 let declare_encoder_ext =
-  let str pat = Ast_pattern.(pstr ((pat (module_binding ~name:(some __') ~expr:(pmod_structure __'))) ^:: nil)) in
-  Extension.(declare_inline "marshal.encoder" Context.structure_item)
-    Ast_pattern.(alt (str pstr_module) (str (fun x -> pstr_recmodule (x ^:: nil)))) declare_encoder
+  List.map
+    (fun (name, partial) ->
+       let str pat =
+         let expr = Ast_pattern.(pmod_structure __') in
+         Ast_pattern.(pstr ((pat (module_binding ~name:(some __') ~expr)) ^:: nil)) in
+       declare_encoder ~partial
+       |> Extension.(declare_inline_with_path_arg name Context.structure_item)
+            Ast_pattern.(alt (str pstr_module) (str (fun x -> pstr_recmodule (x ^:: nil)))))
+    [("marshal.encoder", false); ("marshal.partial_encoder", true)]
 
 (** Register the extension *)
 let () =
-  let extensions = [declare_encoder_ext; declare_target_ext; declare_target_ext'] in
+  let extensions = declare_encoder_ext @ declare_target_ext @ [declare_target_ext'] in
   Driver.register_transformation "ppx_marshal_ext" ~extensions

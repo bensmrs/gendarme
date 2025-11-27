@@ -15,6 +15,8 @@ module type M = sig
   val pack : t -> target
   val marshal : ?v:'a -> 'a ty -> t
   val unmarshal : ?v:t -> 'a ty -> 'a
+  val marshal_safe : ?v:'a -> 'a ty -> t
+  val unmarshal_safe : ?v:t -> 'a ty -> 'a
 end
 
 module type S = sig
@@ -114,7 +116,7 @@ let marshal : type a b. (module M with type t = a) -> ?v:b -> b ty -> a
   | _ -> raise Unimplemented_case
 
 let unmarshal : type a b. (module M with type t = a) -> ?v:a -> b ty -> b
-            = fun (module M) ?v ty -> match ty (), v with
+              = fun (module M) ?v ty -> match ty (), v with
   | Alt a, Some v -> M.pack v |> a.a_put (module M)
   | Proxy { p_wit; p_put; _ }, _ -> M.unmarshal ?v p_wit |> p_put
   | Map (a, b), _ -> pair a b |> list |> M.unmarshal ?v
@@ -122,6 +124,14 @@ let unmarshal : type a b. (module M with type t = a) -> ?v:a -> b ty -> b
   | (Int | Float | String | Bool | List _ | Option _ | Empty_list | Tuple2 _ | Tuple3 _ | Tuple4 _
     | Tuple5 _ | Object _), _ -> raise Type_error
   | _, _ -> raise Unimplemented_case
+
+let marshal_safe : type a b. (module M with type t = a) -> ?v:b -> b ty -> a
+                 = fun (module M) ->
+  marshal (module struct include M let marshal = marshal_safe let unmarshal = unmarshal_safe end)
+
+let unmarshal_safe : type a b. (module M with type t = a) -> ?v:a -> b ty -> b
+                   = fun (module M) ->
+  unmarshal (module struct include M let marshal = marshal_safe let unmarshal = unmarshal_safe end)
 
 let assoc e ?v o =
   let r = (fun () -> Object o) |> get ?v in

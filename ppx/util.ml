@@ -29,7 +29,12 @@ let lident_t ~loc x = lident x |> Loc.make ~loc
 let lident_t' x = lident x.txt |> Loc.make ~loc:x.loc
 
 (** Generate a dotted expression *)
-let dot ~loc name name' = Ldot (lident name, name') |> Loc.make ~loc |> pexp_ident ~loc
+let dot ~loc l =
+  let rec dot_rec = function
+    | [] -> failwith "Unreachable"
+    | hd::[] -> lident hd
+    | hd::tl -> Ldot (dot_rec tl, hd) in
+  List.rev l |> dot_rec |> Loc.make ~loc |> pexp_ident ~loc
 
 (** Generate a function application to unlabelled args *)
 let apply ~loc name args = List.map (fun arg -> (Nolabel, arg)) args |> pexp_apply ~loc name
@@ -78,6 +83,9 @@ let cap = String.capitalize_ascii
 
 (** Uncapitalize a string *)
 let uncap = String.uncapitalize_ascii
+
+(** Gendarmize a module name *)
+let gendarmize m = "Gendarme_" ^ uncap m
 
 (** Wrap a value into a unit function *)
 let wrap ~loc = pexp_fun ~loc Nolabel None (construct_p ~loc "()" [])

@@ -1,4 +1,4 @@
-(** This module provides a handler for the [[@@marshal]] attribute *)
+(** This module provides the user-facing preprocessors for Gendarme *)
 
 open Ppxlib
 open Ast_builder.Default
@@ -69,21 +69,32 @@ let process_record_attrs ~safe field ty base_record =
         process_record_attrs_rec (fds, get, put, Some e, attrs) tl
     | { attr_payload = PStr l; attr_name; attr_loc = loc; _ }::tl
       when String.starts_with ~prefix:"marshal." attr_name.txt || not safe ->
-        let attr = match String.starts_with ~prefix:"marshal." attr_name.txt with
-          | true -> String.sub attr_name.txt 8 (String.length attr_name.txt - 8)
-          | false -> attr_name.txt in
+        let attr = match String.split_on_char '.' attr_name.txt with
+          | "marshal"::tl -> tl
+          | l -> l in
         let process_payload a_cst cst_loc =
           let a = pexp_constant ~loc:cst_loc a_cst in
           let field_l = lident_t' field in
-          let m = "Gendarme_" ^ attr in
-          let cons_name = cap attr in
-          let f_case = case ~lhs:(ppat_tuple ~loc [construct_p ~loc:attr_name.loc cons_name [];
+          let m = String.concat "__" attr |> gendarmize in
+          let cons_p, cons_e = match List.rev attr with
+            | [] -> failwith "Unreachable"
+            | hd::tl ->
+                let name = cap hd in
+                let acc = (construct_p ~loc:attr_name.loc name [],
+                           construct_e ~loc:attr_name.loc name []) in
+                List.fold_left (fun (acc_p, acc_e) c ->
+                  let name = cap c ^ "__" in
+                  (construct_p ~loc:attr_name.loc name [acc_p],
+                   construct_e ~loc:attr_name.loc name [acc_e])) acc tl in
+          let f_case = case ~lhs:(ppat_tuple ~loc [cons_p;
                                                    ppat_constant ~loc:cst_loc a_cst]) ~guard in
-          let get' = f_case ~rhs:(apply ~loc (dot ~loc m "pack")
-            [apply_v ~loc (dot ~loc m "marshal") (pexp_field ~loc (evar ~loc "_%r") field_l) ty]) in
-          let put' = f_case ~rhs:(pexp_record ~loc [(field_l, apply_v ~loc (dot ~loc m "unmarshal")
-            (apply ~loc (dot ~loc m "unpack") [evar ~loc "_%v"]) ty)] base_record) in
-          let fd = pexp_tuple ~loc [construct_e ~loc:attr_name.loc cons_name []; a] in
+          let get' = f_case ~rhs:(apply ~loc (dot ~loc [m; "pack"])
+            [apply_v ~loc (dot ~loc [m; "marshal_safe"]) (pexp_field ~loc (evar ~loc "_%r") field_l)
+                          ty]) in
+          let put' = f_case ~rhs:(pexp_record ~loc
+            [(field_l, apply_v ~loc (dot ~loc [m; "unmarshal_safe"])
+                (apply ~loc (dot ~loc [m; "unpack"]) [evar ~loc "_%v"]) ty)] base_record) in
+          let fd = pexp_tuple ~loc [cons_e; a] in
           (cons ~loc fd fds, get'::get, put'::put, def, attrs) in
         let acc = match l with
           | [] -> process_payload (Pconst_string (field.txt, field.loc, None)) field.loc
@@ -141,8 +152,8 @@ let process_variant ctors =
         let lhs = match err with
           | true -> err_ma ~loc "cannot marshal inlined records" |> ppat_extension ~loc
           | false -> construct_p ~loc pcd_name.txt pat_vars in
-        let rhs = apply ~loc (dot ~loc "%M" "pack")
-          [apply_v ~loc (dot ~loc "%M" "marshal")
+        let rhs = apply ~loc (dot ~loc ["%M"; "pack"])
+          [apply_v ~loc (dot ~loc ["%M"; "marshal"])
                    (tuple_e ~loc (estring ~loc:pcd_name.loc pcd_name.txt::exp_vars)) ty] in
         let get' = case ~lhs ~guard ~rhs in
 
@@ -153,7 +164,7 @@ let process_variant ctors =
         let rhs = construct_e ~loc:pcd_name.loc pcd_name.txt exp_vars in
         let lhs' = ppat_any ~loc in
         let rhs' = apply ~loc (evar ~loc "raise") [construct_e ~loc "Type_error" []] in
-        let put' = pexp_match ~loc (apply_v ~loc (dot ~loc "%M" "unmarshal") (evar ~loc "%v") ty)
+        let put' = pexp_match ~loc (apply_v ~loc (dot ~loc ["%M"; "unmarshal"]) (evar ~loc "%v") ty)
                      [case ~lhs ~guard ~rhs; case ~lhs:lhs' ~guard ~rhs:rhs'] in
         let lhs = ppat_or ~loc (construct_p ~loc "Type_error" [])
                                (construct_p ~loc "Unknown_field" [ppat_any ~loc]) in
@@ -183,7 +194,7 @@ let process_decl ({ ptype_attributes; _ } as decl) =
               [(lident_t ~loc "a_get", pexp_function ~loc get |> fun_m ~loc "%M");
                (lident_t ~loc "a_put",
                 let' ~loc Nonrecursive (pvar ~loc "%v")
-                     (apply ~loc (dot ~loc "%M" "unpack") [evar ~loc "%v"]) put
+                     (apply ~loc (dot ~loc ["%M"; "unpack"]) [evar ~loc "%v"]) put
                 |> fun_ ~loc "%v" |> fun_m ~loc "%M")] None] in
             (decl, alt)
         | Ptype_open -> (decl, eerr_ma ~loc "cannot marshal extensible types")
@@ -257,8 +268,9 @@ end
 
 (** Build simple [Gendarme_<encoder>.<function>] expressions *)
 let build_encoder_expr f ~loc ~path:_ ~arg = match arg with
-  | Some ({ txt = Lident arg; loc }) -> dot ~loc ("Gendarme_" ^ uncap arg) f
-  | Some { loc; _ } -> eerr_me ~loc "expected a valid encoder name"
+  | Some ({ txt = Lident m; loc }) -> dot ~loc [gendarmize m; f]
+  | Some ({ txt = Ldot (Lident m, m'); loc }) -> dot ~loc [gendarmize m ^ "__" ^ uncap m'; f]
+  | Some { loc; _ } -> eerr_me ~loc "expected a valid encoder expression"
   | None -> eerr_me ~loc "expected an encoder name"
 
 (** Build extension processors to rewrite [[%<function>.<encoder>]] into
@@ -296,8 +308,17 @@ let build_converter_ext (name, f, f') =
 let build_loader ~loc:_ ~path:_ =
   let rec build_loader_rec acc = function
   | { pexp_desc = Pexp_construct ({ txt = Lident m; loc }, None); _ } ->
-      (open_infos ~expr:(Ldot ("Gendarme_" ^ uncap m |> lident, "Prelude") |> Loc.make ~loc
+      (open_infos ~expr:(Ldot (gendarmize m |> lident, "Prelude") |> Loc.make ~loc
                          |> pmod_ident ~loc) ~loc ~override:Fresh |> pstr_open ~loc)::acc
+  | { pexp_desc = Pexp_construct ({ txt = Lident m; loc }, Some
+        { pexp_desc = Pexp_construct ({ txt = Lident m'; loc = loc' }, None); _ });
+      pexp_loc = loc''; _ } ->
+      let name = (gendarmize m) ^ "__" ^ uncap m' in
+      let me = pmod_ident ~loc (Ldot (gendarmize m |> lident, "Make") |> Loc.make ~loc) in
+      let me' = pmod_ident ~loc:loc' (gendarmize m' |> lident_t ~loc:loc') in
+      let expr = pmod_apply ~loc:loc'' me me' in
+      (module_binding ~loc:loc'' ~name:(Loc.make ~loc:loc'' (Some name)) ~expr |>
+       pstr_module ~loc:loc'')::acc
   | { pexp_desc = Pexp_sequence (hd, tl); _ } ->
       build_loader_rec (build_loader_rec acc hd) tl
   | { pexp_loc = loc; _ } ->
