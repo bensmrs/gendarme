@@ -1,9 +1,7 @@
 open Gendarme
 [%%target.Json Ezjsonm.value]
 
-module rec M : Gendarme.M with type t = E.t = struct
-  include E
-
+module%encoder M = struct
   let rec marshal : type a. ?v:a -> a ty -> t = fun ?v ty -> match ty () with
     | Int -> `Float (get ?v ty |> Float.of_int)
     | Float -> `Float (get ?v ty)
@@ -66,9 +64,6 @@ module rec M : Gendarme.M with type t = E.t = struct
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty
 end
-
-include E
-include M
 
 let encode ?v ty = marshal ?v ty |> Ezjsonm.value_to_string
 let decode ?v = unmarshal ?v:(Option.map Ezjsonm.value_from_string v)

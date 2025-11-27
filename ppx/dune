@@ -9,5 +9,5 @@
  (name ppx_marshal_ext)
  (public_name ppx_marshal_ext)
  (libraries ppxlib)
- (modules ppx_marshal_ext)
+ (modules ppx_marshal_ext util_ext)
  (kind ppx_rewriter))

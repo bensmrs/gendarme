@@ -1,9 +1,7 @@
 open Gendarme
 [%%target.Json Yojson.Safe.t]
 
-module rec M : Gendarme.M with type t = E.t = struct
-  include E
-
+module%encoder M = struct
   let rec marshal : type a. ?v:a -> a ty -> t = fun ?v ty -> match ty () with
     | Int -> `Int (get ?v ty)
     | Float -> `Float (get ?v ty)
@@ -68,9 +66,6 @@ module rec M : Gendarme.M with type t = E.t = struct
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty
 end
-
-include E
-include M
 
 let encode ?v ty = marshal ?v ty |> Yojson.Safe.to_string
 let decode ?v = unmarshal ?v:(Option.map Yojson.Safe.from_string v)

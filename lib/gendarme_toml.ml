@@ -1,9 +1,7 @@
 open Gendarme
 [%%target.Toml Toml.Types.value]
 
-module rec M : Gendarme.M with type t = E.t = struct
-  include E
-
+module%encoder M = struct
   (** The TOML library handles lists in a peculiar way, so we need to work around that *)
   let rec marshal_list : type a. ?v:a list -> a ty -> a list ty -> Toml.Types.array
                        = fun ?v a ty -> match a () with
@@ -153,9 +151,6 @@ module rec M : Gendarme.M with type t = E.t = struct
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty
 end
-
-include E
-include M
 
 (** Our marshaller handles values well, but TOML is table-based, so additional wrapping is
     necessary *)
