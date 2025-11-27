@@ -2,11 +2,14 @@
 
 open Alcotest
 
-(* Load TOML and YAML encoders *)
-[%%marshal.load Toml; Yaml]
+(* Load CSV<;Yaml;Yojson>, TOML and YAML encoders *)
+[%%marshal.load Csv; Csv (Yaml); Csv (Yojson); Toml; Yaml]
 
 (** To be extra safe, we completely shadow Gendarme_json *)
 module Gendarme_json = struct end
+
+(** For instrumentation purposes, we alias Yojson for the CSV encoder *)
+module Gendarme_csv__json = Gendarme_csv__yojson
 
 (** Because different implementations exist for JSON encoders, we handle them in a special way by
     abusing the type system. We need to do it here, else the extensible variant cannot be properly
@@ -38,6 +41,78 @@ end
 (** Modularize a test suite *)
 let modularize (suite, kind, f) =
   List.map (fun (name, m) -> (suite ^ " (" ^ name ^ ")", kind, f m))
+
+(** A few simple tests with CSV<>. We make here absolutely no effort for completeness on the modular
+    version of this encoder *)
+let test_simple_types_csv () =
+  check string "int>" "42\n" ([%encode.Csv] ~v:42 Gendarme.int);
+  check string "string>" "42\n" ([%encode.Csv] ~v:"42" Gendarme.string);
+  check string "bool>" "true\n" ([%encode.Csv] ~v:true Gendarme.bool);
+  (*  *)
+  let v = [%encode.Csv] ~v:42 Gendarme.int in
+  [%decode.Csv] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.
+
+(** A few simple tests with CSV<JSON> *)
+let test_simple_types_csv_json () =
+  check string "int>" "42\n" ([%encode.Csv.Json] ~v:42 Gendarme.int);
+  check string "string>" "42\n" ([%encode.Csv.Json] ~v:"42" Gendarme.string);
+  check string "bool>" "true\n" ([%encode.Csv.Json] ~v:true Gendarme.bool);
+  check string "float list>" "1.2\n3.4\n" ([%encode.Csv.Json] ~v:[1.2; 3.4] Gendarme.(list float));
+  [%decode.Csv.Json] ~v:"1\n2\n3\n4" Gendarme.(list int)
+  |> check (list int) "int list<" [1; 2; 3; 4];
+  check string "empty list 1>" "" ([%encode.Csv.Json] ~v:[] Gendarme.(list int));
+  check string "empty list 2>" "" ([%encode.Csv.Json] ~v:[] Gendarme.(empty_list));
+  check (list int) "empty list 1<" [] ([%decode.Csv.Json] ~v:"" Gendarme.(list int));
+  check (list string) "empty list 2<" [] ([%decode.Csv.Json] ~v:"" Gendarme.(empty_list));
+  let v = [%encode.Csv.Json] ~v:42 Gendarme.int in
+  [%decode.Csv.Json] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check string "int option 1>" "42\n" ([%encode.Csv.Json] ~v:(Some 42) Gendarme.(option int));
+  check string "int option 2>" "" ([%encode.Csv.Json] ~v:None Gendarme.(option int));
+  check (option int) "int option 1<" (Some 42) ([%decode.Csv.Json] ~v:"42" Gendarme.(option int));
+  check (option int) "int option 2<" None ([%decode.Csv.Json] ~v:"" Gendarme.(option int));
+  [%encode.Csv.Json] ~v:(1, "b", 3) Gendarme.(triple int string int)
+  |> check string "int * string * int>" "1,b,3\n";
+  [%decode.Csv.Json] ~v:"1,b,3" Gendarme.(triple int string int)
+  |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  [%encode.Csv.Json] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 1>" "42,foo\n123,bar\n";
+  [%decode.Csv.Json] ~v:"42,foo\n123,bar" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
+  [%encode.Csv.Json] ~v:[] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 2>" "";
+  [%decode.Csv.Json] ~v:"" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 2<" []
+
+(** A few simple tests with CSV<YAML> *)
+let test_simple_types_csv_yaml () =
+  check string "int>" "42\n" ([%encode.Csv.Yaml] ~v:42 Gendarme.int);
+  check string "string>" "42\n" ([%encode.Csv.Yaml] ~v:"42" Gendarme.string);
+  check string "bool>" "true\n" ([%encode.Csv.Yaml] ~v:true Gendarme.bool);
+  check string "float list>" "1.2\n3.4\n" ([%encode.Csv.Yaml] ~v:[1.2; 3.4] Gendarme.(list float));
+  [%decode.Csv.Yaml] ~v:"1\n2\n3\n4" Gendarme.(list int)
+  |> check (list int) "int list<" [1; 2; 3; 4];
+  check string "empty list 1>" "" ([%encode.Csv.Yaml] ~v:[] Gendarme.(list int));
+  check string "empty list 2>" "" ([%encode.Csv.Yaml] ~v:[] Gendarme.(empty_list));
+  check (list int) "empty list 1<" [] ([%decode.Csv.Yaml] ~v:"" Gendarme.(list int));
+  check (list string) "empty list 2<" [] ([%decode.Csv.Yaml] ~v:"" Gendarme.(empty_list));
+  let v = [%encode.Csv.Yaml] ~v:42 Gendarme.int in
+  [%decode.Csv.Yaml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check string "int option 1>" "42\n" ([%encode.Csv.Yaml] ~v:(Some 42) Gendarme.(option int));
+  check string "int option 2>" "" ([%encode.Csv.Yaml] ~v:None Gendarme.(option int));
+  check (option int) "int option 1<" (Some 42) ([%decode.Csv.Yaml] ~v:"42" Gendarme.(option int));
+  check (option int) "int option 2<" None ([%decode.Csv.Yaml] ~v:"" Gendarme.(option int));
+  [%encode.Csv.Yaml] ~v:(1, "b", 3) Gendarme.(triple int string int)
+  |> check string "int * string * int>" "1,b,3\n";
+  [%decode.Csv.Yaml] ~v:"1,b,3" Gendarme.(triple int string int)
+  |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  [%encode.Csv.Yaml] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 1>" "42,foo\n123,bar\n";
+  [%decode.Csv.Yaml] ~v:"42,foo\n123,bar" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
+  [%encode.Csv.Yaml] ~v:[] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 2>" "";
+  [%decode.Csv.Yaml] ~v:"" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** A few simple tests with JSON *)
 let test_simple_types_json (module Gendarme_json : JSON) () =
@@ -138,24 +213,46 @@ let test_simple_types_yaml () =
 (** This module defines interesting cases to check record marshalling *)
 module M1' (Gendarme_json : JSON) = struct
   include Gendarme_json.Prelude
-  type t1 = { t1_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"] } [@@marshal]
+  type t1 = { t1_foo: int [@csv.json "foo"] [@csv.yaml "bar"] [@json "foo"] [@yaml "foo"]
+                          [@toml "foo"] } [@@marshal]
   let v1 = { t1_foo = 42 }
-  type t2 = { t2_foo: int [@json "foo"]; t2_bar: float [@yaml "bar"];
-              t3_baz: string [@toml "baz"] } [@@marshal]
+  type t2 = { t2_foo: int [@csv.json "foo"] [@json "foo"];
+              t2_bar: float [@csv.json "bar"] [@yaml "bar"];
+              t3_baz: string [@csv.json "baz"] [@toml "baz"] } [@@marshal]
   let v2 = { t2_foo = 42; t2_bar = 1.1; t3_baz = "foo" }
-  type t3 = { t3_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
-              t3_bar: float [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
+  type t3 = { t3_foo: int [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
+              t3_bar: float [@csv.json "bar"] [@json "bar"] [@yaml "bar"] [@toml "bar"] }
+            [@@marshal]
   let v3 = { t3_foo = 42; t3_bar = 1.1 }
-  type t4 = { t4_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
-              t4_bar: t1 [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
+  type t4 = { t4_foo: int [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
+              t4_bar: t1 [@csv.json "bar"] [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
   let v4 = { t4_foo = 42; t4_bar = { t1_foo = 42 } }
-  type t5 = { t5_foo: int [@json "foo"] [@yaml "foo"] [@toml "foo"];
-              t5_bar: int * string [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
+  type t5 = { t5_foo: int [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
+              t5_bar: int * string [@csv.json "bar"] [@json "bar"] [@yaml "bar"] [@toml "bar"] }
+            [@@marshal]
   let v5 = { t5_foo = 42; t5_bar = (1, "bar") }
   let v5' = { t5_foo = 123; t5_bar = (3, "baz") }
 end
 
 module M1 = M1' (Gendarme_yojson)
+
+(** A few record tests with CSV<JSON> *)
+let test_records_csv_json () =
+  check string "t1>" "foo\n42\n" M1.([%encode.Csv.Json] ~v:v1 t1);
+  (* Just to be extra sure, we make our last CSV<YAML> test here *)
+  check string "t1>" "bar\n42\n" M1.([%encode.Csv.Yaml] ~v:v1 t1);
+  check string "t2>" "foo,bar,baz\n42,1.1,foo\n" M1.([%encode.Csv.Json] ~v:v2 t2);
+  check string "t3>" "foo,bar\n42,1.1\n" M1.([%encode.Csv.Json] ~v:v3 t3);
+  check bool "t3<" true M1.([%decode.Csv.Json] ~v:"foo,bar\n42,1.1" t3 = v3);
+  check string "t4>" "foo,bar\n42,\"{\"\"foo\"\":42}\"\n" M1.([%encode.Csv.Json] ~v:v4 t4);
+  check bool "t4<" true M1.([%decode.Csv.Json] ~v:"foo,bar\n42,\"{\"\"foo\"\":42}\"" t4 = v4);
+  check string "t5>" "foo,bar\n42,\"[1,\"\"bar\"\"]\"\n" M1.([%encode.Csv.Json] ~v:v5 t5);
+  check bool "t5<" true M1.([%decode.Csv.Json] ~v:"foo,bar\n42,\"[1,\"\"bar\"\"]\"" t5 = v5);
+  let csv = "foo,bar\n42,\"[1,\"\"bar\"\"]\"\n123,\"[3,\"\"baz\"\"]\"\n" in
+  check string "t5l>" csv M1.([%encode.Csv.Json] ~v:[v5; v5'] (Gendarme.list t5));
+  check bool "t5l<" true M1.([%decode.Csv.Json] ~v:csv (Gendarme.list t5) = [v5; v5']);
+  check string "t5l0>" "foo,bar\n" M1.([%encode.Csv.Json] ~v:[] (Gendarme.list t5));
+  check bool "t5l0<" true M1.([%decode.Csv.Json] ~v:"foo,bar" (Gendarme.list t5) = [])
 
 (** A few record tests with JSON *)
 let test_records_json (module Gendarme_json : JSON) () =
@@ -231,7 +328,7 @@ module M2' (Gendarme_json : JSON) = struct
   type t3 = Foo3 of t3 list | Bar3 of M1.t5 [@@marshal]
   let v3 = Foo3 [Foo3 []]
   let v3' = Bar3 { t5_foo = 42; t5_bar = (12, "foo") }
-  type t4 = { foo4: t2 [@json] [@yaml] [@toml] [@default Foo2] } [@@marshal]
+  type t4 = { foo4: t2 [@csv.json] [@json] [@yaml] [@toml] [@default Foo2] } [@@marshal]
   let v4 = { foo4 = Foo2 }
   let v4' = { foo4 = Bar2 (2, "foo") }
   type t5 = Foo5 of M1.t1 | Bar5 of M1.t3 [@@marshal]
@@ -240,6 +337,34 @@ module M2' (Gendarme_json : JSON) = struct
 end
 
 module M2 = M2' (Gendarme_yojson)
+
+(** A few variant tests with CSV<JSON> *)
+let test_variants_csv_json () =
+  check string "t1 1>" "Foo1\n" M2.([%encode.Csv.Json] ~v:v1 t1);
+  check string "t1 2>" "Bar1\n" M2.([%encode.Csv.Json] ~v:v1' t1);
+  check bool "t1 1<" true M2.([%decode.Csv.Json] ~v:"Foo1" t1 = v1);
+  check bool "t1 2<" true M2.([%decode.Csv.Json] ~v:"Bar1" t1 = v1');
+  check string "t2 1>" "Foo2\n" M2.([%encode.Csv.Json] ~v:v2 t2);
+  check string "t2 2>" "Bar2,42,bar\n" M2.([%encode.Csv.Json] ~v:v2' t2);
+  check bool "t2 1<" true M2.([%decode.Csv.Json] ~v:"Foo2" t2 = v2);
+  check bool "t2 2<" true M2.([%decode.Csv.Json] ~v:"Bar2,42,bar" t2 = v2');
+  check string "t3 1>" "Foo3,\"[[\"\"Foo3\"\",[]]]\"\n" M2.([%encode.Csv.Json] ~v:v3 t3);
+  M2.([%encode.Csv.Json] ~v:v3' t3)
+  |> check string "t3 2>" "Bar3,\"{\"\"foo\"\":42,\"\"bar\"\":[12,\"\"foo\"\"]}\"\n";
+  check bool "t3 1<" true M2.([%decode.Csv.Json] ~v:"Foo3,\"[[\"\"Foo3\"\",[]]]\"" t3 = v3);
+  M2.([%decode.Csv.Json] ~v:"Bar3,\"{\"\"foo\"\":42,\"\"bar\"\":[12,\"\"foo\"\"]}\"" t3 = v3')
+  |> check bool "t3 2<" true;
+  check string "t4 1>" "foo4\nFoo2\n" M2.([%encode.Csv.Json] ~v:v4 t4);
+  check string "t4 2>" "foo4\n\"[\"\"Bar2\"\",2,\"\"foo\"\"]\"\n" M2.([%encode.Csv.Json] ~v:v4' t4);
+  check bool "t4 1<" true M2.([%decode.Csv.Json] ~v:"foo4\nFoo2" t4 = v4);
+  M2.([%decode.Csv.Json] ~v:"foo4\n\"[\"\"Bar2\"\",2,\"\"foo\"\"]\"" t4 = v4')
+  |> check bool "t4 2<" true;
+  check string "t5 1>" "Foo5,\"{\"\"foo\"\":1}\"\n" M2.([%encode.Csv.Json] ~v:v5 t5);
+  M2.([%encode.Csv.Json] ~v:v5' t5)
+  |> check string "t5 2>" "Bar5,\"{\"\"foo\"\":2,\"\"bar\"\":3.1}\"\n";
+  check bool "t5 1<" true M2.([%decode.Csv.Json] ~v:"Foo5,\"{\"\"foo\"\":1}\"" t5 = v5);
+  M2.([%decode.Csv.Json] ~v:"Bar5,\"{\"\"foo\"\":2,\"\"bar\"\":3.1}\"" t5 = v5')
+  |> check bool "t5 2<" true
 
 (** A few variant tests with JSON *)
 let test_variants_json (module Gendarme_json : JSON) () =
@@ -334,6 +459,27 @@ end
 
 (** Check whether two seqs are equal *)
 let seq_eq s s' = List.for_all2 (=) (List.of_seq s) (List.of_seq s')
+
+(** A few tests for the proxy feature with CSV<JSON> *)
+let test_proxies_csv_json () =
+  check string "t1>" "1\n2\n3\n4\n5\n" M3.([%encode.Csv.Json] ~v:v1 t1);
+  check bool "t1<" true M3.([%decode.Csv.Json] ~v:"1\n2\n3\n4\n5" t1 |> seq_eq v1);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let csv = "foo,bar\n42,12\n" in
+  let csv' = "bar,foo\n12,42\n" in
+  check bool "t2>" true M3.(let s = [%encode.Csv.Json] ~v:v2 t2 in s = csv || s = csv');
+  let s = M3.([%decode.Csv.Json] ~v:csv t2 |> Hashtbl.to_seq) in
+  check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
+  let csv = "1.1,2.5\n42,12\n" in
+  let csv' = "2.5,1.1\n12,42\n" in
+  check bool "t3>" true M3.(let s = [%encode.Csv.Json] ~v:v3 t3 in s = csv || s = csv');
+  let s = M3.([%decode.Csv.Json] ~v:csv t3 |> Hashtbl.to_seq) in
+  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3');
+  let csv = "\"[1,2]\",\"[4,5]\"\n3,6\n" in
+  let csv' = "\"[4,5]\",\"[1,2]\"\n6,3\n" in
+  check bool "t4>" true M3.(let s = [%encode.Csv.Json] ~v:v4 t4 in s = csv || s = csv');
+  let s = M3.([%decode.Csv.Json] ~v:csv t4 |> Hashtbl.to_seq) in
+  check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
 (** A few tests for the proxy feature with JSON *)
 let test_proxies_json (module Gendarme_json : JSON) () =
@@ -472,18 +618,24 @@ let test_exceptions () =
 let () =
   run "ppx_marshal" [
     ("simple types",
+      ("test_simple_types_csv", `Quick, test_simple_types_csv)::
+      ("test_simple_types_csv_json", `Quick, test_simple_types_csv_json)::
+      ("test_simple_types_csv_yaml", `Quick, test_simple_types_csv_yaml)::
       modularize ("test_simple_types_json", `Quick, test_simple_types_json) json @
       [("test_simple_types_toml", `Quick, test_simple_types_toml);
        ("test_simple_types_yaml", `Quick, test_simple_types_yaml)]);
     ("records",
+      ("test_records_csv_json", `Quick, test_records_csv_json)::
       modularize ("test_records_json", `Quick, test_records_json) json @
       [("test_records_toml", `Quick, test_records_toml);
        ("test_records_yaml", `Quick, test_records_yaml)]);
     ("variants",
+      ("test_variants_csv_json", `Quick, test_variants_csv_json)::
       modularize ("test_variants_json", `Quick, test_variants_json) json @
       [("test_variants_toml", `Quick, test_variants_toml);
        ("test_variants_yaml", `Quick, test_variants_yaml)]);
     ("proxies",
+      ("test_proxies_csv_json", `Quick, test_proxies_csv_json)::
       modularize ("test_proxies_json", `Quick, test_proxies_json) json @
       [("test_proxies_toml", `Quick, test_proxies_toml);
        ("test_proxies_yaml", `Quick, test_proxies_yaml)]);

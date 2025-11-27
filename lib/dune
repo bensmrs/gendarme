@@ -4,6 +4,13 @@
  (modules gendarme))
 
 (library
+ (name gendarme_csv)
+ (public_name gendarme-csv)
+ (modules gendarme_csv)
+ (libraries gendarme csv)
+ (preprocess (pps ppx_marshal_ext)))
+
+(library
  (name gendarme_toml)
  (public_name gendarme-toml)
  (modules gendarme_toml)

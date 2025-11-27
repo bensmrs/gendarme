@@ -59,6 +59,7 @@ For now, `Gendarme` can encode data in the following formats:
 
 | Format | Library | Internal type | Remarks |
 |---|---|---|---|
+| CSV | [OCaml CSV](https://opam.ocaml.org/packages/csv/) | `Csv.t` | This is a functorial encoder, supposed to be used in combination with a modular encoder. A sane choice is to combine it with JSON.
 | JSON | [Ezjsonm](https://opam.ocaml.org/packages/ezjsonm/) | `Ezjsonm.value`
 || [Yojson](https://opam.ocaml.org/packages/yojson/) | `Yojson.Safe.t` |
 | TOML | [toml](https://opam.ocaml.org/packages/toml/) | `Toml.Types.value` | Limited support due to problems within the Toml library. Non-record values are wrapped to conform to TOML.
@@ -100,6 +101,12 @@ val baz : unit -> (string * foo) list Gendarme.t = <fun>
 ```
 
 Mixing several implementations of the same data format (e.g. Ezjsonm + Yojson) is not recommended.
+
+Functorial encoders such as the CSV encoder require a little more care, as you need to load both the modular and the functorial interfaces. For example, to load the CSV encoder with a Yojson fallback,
+
+```ocaml
+[%%marshal.load Csv; Csv.Yojson]
+```
 
 ### Marshalling
 

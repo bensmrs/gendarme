@@ -15,6 +15,14 @@
  (description "This package provides common primitives to marshal OCaml data structures"))
 
 (package
+ (name gendarme-csv)
+ (synopsis "Libraries to marshal OCaml data structures (CSV)")
+ (description "This package allows to marshal OCaml data structures to CSV")
+ (depends
+  (ppx_marshal_ext (= :version))
+  (csv (>= 2.3))))
+
+(package
  (name gendarme-ezjsonm)
  (synopsis "Libraries to marshal OCaml data structures (JSON [Ezjsonm])")
  (description "This package allows to marshal OCaml data structures to JSON using Ezjsonm")
