@@ -105,7 +105,7 @@ let declare_target_ext =
        declare_target ~partial
        |> Extension.(declare_inline_with_path_arg name Context.structure_item)
             Ast_pattern.(pstr (pstr_eval (pexp_ident __') nil ^:: nil)))
-    [("marshal.target", false); ("marshal.partial_target", true)]
+    [("marshal.target", false); ("marshal.target.partial", true)]
 
 (** Rewrite the extension node to declare the encoder signature *)
 let process' loc lid arg_loc arg =
@@ -133,7 +133,7 @@ let declare_target_ext' =
 (** Handle PPX arguments *)
 let declare_encoder ~partial ~loc ~path:_ ~arg name str = match (partial, arg) with
   | true, None ->
-      [pstr_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.partial_encoder"
+      [pstr_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.encoder.partial"
                                                            "expected an encoder argument") []]
   | false, Some _ ->
       [pstr_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.encoder"
@@ -188,7 +188,7 @@ let declare_encoder_ext =
        declare_encoder ~partial
        |> Extension.(declare_inline_with_path_arg name Context.structure_item)
             Ast_pattern.(alt (str pstr_module) (str (fun x -> pstr_recmodule (x ^:: nil)))))
-    [("marshal.encoder", false); ("marshal.partial_encoder", true)]
+    [("marshal.encoder", false); ("marshal.encoder.partial", true)]
 
 (** Register the extension *)
 let () =

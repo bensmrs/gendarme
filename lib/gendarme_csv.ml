@@ -1,5 +1,5 @@
 open Gendarme
-[%%partial_target.Csv Csv.t]
+[%%target.partial.Csv Csv.t]
 
 let up v = [[v]]
 let down v = List.hd v |> List.hd
@@ -43,7 +43,7 @@ let encode ?v ty =
 let decode ?v = unmarshal ?v:(Option.map Csv.(fun v -> of_string v |> input_all) v)
 
 module Make (D : Gendarme.S) = struct
-  module%partial_encoder.D M = struct
+  module%encoder.partial.D M = struct
     let marshal_safe : type a. ?v:a -> a ty -> t = fun ?v ty -> match ty () with
       | Int | Float | String | Bool -> marshal_common ?v ty
       | Alt _ | Proxy _ -> Gendarme.marshal_safe (module M) ?v ty
