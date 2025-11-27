@@ -186,7 +186,23 @@ However, because inlined records cannot escape their scope, they are not support
 
 Because `ppx_marshal` cannot reasonably infer a default value for variant types, record fields of variant types must define default values.
 
-## Extension clash
+## Customizing Gendarme’s behavior
+
+`[@@marshal]` supports a few options to tune its behavior:
+
+* `disallow_unknown_fields`, to return an error when unmarshalling fields that are not present in the target record (default: `false`);
+* `safe`, to require Gendarme annotations to be prefixed with `marshal.` (default: `false`).
+
+### Using Gendarme options
+
+Gendarme options can be passed to `[@@marshal]` in two equivalent ways:
+
+* By writing a sequence of flags to enable (*e.g.* `[@@marshal disallow_unknown_fields; safe]`);
+* By writing a configuration record (*e.g.* `[@@marshal { disallow_unknown_fields; safe }]`). Note that the record fields used this way are implicitly set to `true`, but one could also explicitly write `safe = true` or `safe = false` (the only two values currently supported).
+
+For backwards compatibility reasons, we support using `[@@marshal.safe]` to set the `safe` option to `true`.
+
+### Preventing extension clash with `safe`
 
 If you are using other preprocessor extensions, the way `[@@marshal]` interprets record attributes can clash with other annotations. To avoid that, you can use `ppx_marshal`’s safe mode by marshalling your records with `[@@marshal.safe]`. This way, only attributes prefixed with `marshal.` are handled:
 
