@@ -35,7 +35,7 @@ It should be noted that recursive types are supported, thus enabling to marshal 
 |---|---|---|---|
 | Abstract type | `t` | ✓ | See “Supported core types” |
 | Record type | `{ a: a; b: b }` | ✓ | |
-| Variant type | `A \| B` | ✓ | Inlined records are not supported and probably never will be. Future versions may include the ability to rename constructors when they are marshalled. Empty variants are not marshallable. |
+| Variant type | `A \| B` | ✓ | Inlined records are not supported but may be in the future. Future versions may include the ability to rename constructors when they are marshalled. Empty variants are not marshallable. |
 | Open type | `..` | ✗ | Future versions may allow open types |
 
 ### Supported core types
@@ -105,7 +105,7 @@ Mixing several implementations of the same data format (e.g. Ezjsonm + Yojson) i
 Functorial encoders such as the CSV encoder require a little more care, as you need to load both the modular and the functorial interfaces. For example, to load the CSV encoder with a Yojson fallback,
 
 ```ocaml
-[%%marshal.load Csv; Csv.Yojson]
+[%%marshal.load Csv; Csv (Yojson)]
 ```
 
 ### Marshalling
@@ -175,7 +175,7 @@ Variant types are handled transparently as well:
 type t = Foo | Bar of int [@@marshal]
 ```
 
-However, because inlined records cannot escape their scope, they are not supported. Variant types are handled quite differently from other types, as they have an inherent structural inhomogeneity. This, along with some historical design decisions within the OCaml compiler, required us to resort to a few trickeries to both please the typechecker and have a consistent behavior. The (currently non-customizable) canonical marshalling of nullary constructors is their string representation, while for non-nullary constructors, it is a tuple made of the constructor string representation and its arguments:
+However, due to the way Gendarme is designed, inlined records are not supported yet. Variant types are handled quite differently from other types, as they have an inherent structural inhomogeneity. This, along with some historical design decisions within the OCaml compiler, required us to resort to a few trickeries to both please the typechecker and have a consistent behavior. The (currently non-customizable) canonical marshalling of nullary constructors is their string representation, while for non-nullary constructors, it is a tuple made of the constructor string representation and its arguments:
 
 ```math
 \begin{aligned}
