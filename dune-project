@@ -1,6 +1,6 @@
 (lang dune 3.18)
 (name gendarme)
-(version 0.4.0)
+(version 0.4.1)
 (generate_opam_files true)
 (license MIT)
 (authors "Benjamin Somers <benjamin.somers@imt-atlantique.fr>")
@@ -13,6 +13,7 @@
  (name gendarme)
  (synopsis "Libraries to marshal OCaml data structures")
  (description "This package provides common primitives to marshal OCaml data structures")
+ (depends (ppxlib (>= 0.26.0))) ; This is currently needed because of ocaml/dune#13894
  (maintenance_intent "(latest)"))
 
 (package
