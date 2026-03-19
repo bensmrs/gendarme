@@ -3,6 +3,7 @@
 open Ppxlib
 open Ast_builder.Default
 open Util
+open Compat
 
 type marshal_args = { safe : bool; disallow_unknown_fields : bool }
 
@@ -267,13 +268,12 @@ let process_decl ({ ptype_attributes; ptype_loc = loc; _ } as decl) =
                       ::ptype_attributes
               | _ -> ptype_attributes in
             ({ decl with ptype_kind = Ptype_record l; ptype_attributes }, obj) in
-      let pvb_pat = ppat_var ~loc ptype_name in
-      let pvb_attributes = [ignore_warn ~loc 33; ignore_warn ~loc 39] in
+      let pat = ppat_var ~loc ptype_name in
+      let attributes = [ignore_warn ~loc 33; ignore_warn ~loc 39] in
       (* This additional wrapping is needed to avoid `Gendarme' to shadow types being defined *)
-      let pvb_expr =
-        let' ~loc Recursive pvb_pat (wrap ~loc expr) (evar ~loc:ptype_name.loc ptype_name.txt)
-        |> open_module ~loc (lident "Gendarme") in
-      (decl, [{ pvb_expr; pvb_pat; pvb_attributes; pvb_loc = loc }])
+      let expr = let' ~loc Recursive pat (wrap ~loc expr) (evar ~loc:ptype_name.loc ptype_name.txt)
+                 |> open_module ~loc (lident "Gendarme") in
+      (decl, [pvb expr pat attributes loc])
 
 (** Process type declarations in interfaces *)
 let process_decl' ({ ptype_attributes; _ } as decl) =

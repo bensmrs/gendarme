@@ -72,7 +72,7 @@
   (gendarme-yaml (and (= :version) :with-test))
   (gendarme-yojson (and (= :version) :with-test))
   (ocaml (>= 4.13.0))
-  (ppxlib (and (>= 0.26.0) (< 0.36)))))
+  (ppxlib (>= 0.26.0))))
 
 (package
  (name ppx_marshal_ext)
@@ -81,4 +81,4 @@
  (depends
   (gendarme (= :version))
   (ocaml (>= 4.13.0))
-  (ppxlib (and (>= 0.26.0) (< 0.36)))))
+  (ppxlib (>= 0.26.0))))

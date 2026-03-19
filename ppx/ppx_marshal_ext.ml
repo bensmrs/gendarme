@@ -3,6 +3,7 @@
 open Ppxlib
 open Ast_builder.Default
 open Util_ext
+open Compat_ext
 
 (** Generate a structure error node *)
 let err ~loc msg =

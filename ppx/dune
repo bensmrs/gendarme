@@ -2,12 +2,28 @@
  (name ppx_marshal)
  (public_name ppx_marshal)
  (libraries ppxlib)
- (modules ppx_marshal util)
+ (modules compat ppx_marshal util)
  (kind ppx_rewriter))
 
 (library
  (name ppx_marshal_ext)
  (public_name ppx_marshal_ext)
  (libraries ppxlib)
- (modules ppx_marshal_ext util_ext)
+ (modules compat_ext ppx_marshal_ext util_ext)
  (kind ppx_rewriter))
+
+(rule
+ (target compat.ml)
+ (enabled_if (< %{version:ppxlib} 0.36))
+ (action
+  (progn
+   (copy# compat_old.ml compat.ml)
+   (copy# compat_old.ml compat_ext.ml))))
+
+(rule
+ (target compat.ml)
+ (enabled_if (>= %{version:ppxlib} 0.36))
+ (action
+  (progn
+   (copy# compat_new.ml compat.ml)
+   (copy# compat_new.ml compat_ext.ml))))
