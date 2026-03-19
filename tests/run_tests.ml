@@ -439,19 +439,19 @@ let test_variants_yaml () =
 
 (** This module defines interesting cases to check variant marshalling *)
 module M3 = struct
-  type t1 = int Seq.t [@@marshal]
+  type t1 = int Seq.t [@@marshal] [@@warning "-34"]
   let v1 = Seq.(cons 5 empty |> cons 4 |> cons 3 |> cons 2 |> cons 1)
-  type t2 = (string, int) Hashtbl.t [@@marshal]
+  type t2 = (string, int) Hashtbl.t [@@marshal] [@@warning "-34"]
   let s2 = Seq.(cons ("foo", 42) empty |> cons ("bar", 12))
   let s2' = Seq.(cons ("bar", 12) empty |> cons ("foo", 42))
   let v2 = Hashtbl.of_seq s2
   (* Most marshallers don’t really have an equivalent for non-string-keyed maps. Still, we try our
      best to coerce where it feels safe. *)
-  type t3 = (float, int) Hashtbl.t [@@marshal]
+  type t3 = (float, int) Hashtbl.t [@@marshal] [@@warning "-34"]
   let s3 = Seq.(cons (1.1, 42) empty |> cons (2.5, 12))
   let s3' = Seq.(cons (2.5, 12) empty |> cons (1.1, 42))
   let v3 = Hashtbl.of_seq s3
-  type t4 = (int * int, int) Hashtbl.t [@@marshal]
+  type t4 = (int * int, int) Hashtbl.t [@@marshal] [@@warning "-34"]
   let s4 = Seq.(cons ((1, 2), 3) empty |> cons ((4, 5), 6))
   let s4' = Seq.(cons ((4, 5), 6) empty |> cons ((1, 2), 3))
   let v4 = Hashtbl.of_seq s4
@@ -578,13 +578,14 @@ let test_safe_mode () =
     type t1' = { t1'_foo: int [@json "foo"] [@default 42];
                  t1'_bar: string [@marshal.json "bar"] } [@@marshal { safe = false }]
     type t2 = { t2_foo: int [@json "foo"] [@default 42];
-                t2_bar: string [@marshal.json "bar"] } [@@marshal.safe]
+                t2_bar: string [@marshal.json "bar"] } [@@marshal.safe] [@@warning "-69"]
     type t2' = { t2'_foo: int [@json "foo"] [@default 42];
-                 t2'_bar: string [@marshal.json "bar"] } [@@marshal safe]
+                 t2'_bar: string [@marshal.json "bar"] } [@@marshal safe] [@@warning "-69"]
     type t2'' = { t2''_foo: int [@json "foo"] [@default 42];
-                  t2''_bar: string [@marshal.json "bar"] } [@@marshal { safe }]
+                  t2''_bar: string [@marshal.json "bar"] } [@@marshal { safe }] [@@warning "-69"]
     type t2''' = { t2'''_foo: int [@json "foo"] [@default 42];
-                   t2'''_bar: string [@marshal.json "bar"] } [@@marshal { safe = true }]
+                   t2'''_bar: string [@marshal.json "bar"] }
+                 [@@marshal { safe = true }] [@@warning "-69"]
     type t3 = { t3_foo: int [@marshal.json "foo"] [@marshal.default 42];
                 t3_bar: string [@marshal.json "bar"] } [@@marshal.safe]
     let v1 = { t1_foo = 42; t1_bar = "foo" }

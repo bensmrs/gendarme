@@ -1,4 +1,4 @@
-(lang dune 2.7)
+(lang dune 3.18)
 (name gendarme)
 (version 0.4.0)
 (generate_opam_files true)
@@ -12,12 +12,14 @@
 (package
  (name gendarme)
  (synopsis "Libraries to marshal OCaml data structures")
- (description "This package provides common primitives to marshal OCaml data structures"))
+ (description "This package provides common primitives to marshal OCaml data structures")
+ (maintenance_intent "(latest)"))
 
 (package
  (name gendarme-csv)
  (synopsis "Libraries to marshal OCaml data structures (CSV)")
  (description "This package allows to marshal OCaml data structures to CSV")
+ (maintenance_intent "(latest)")
  (depends
   (ppx_marshal_ext (= :version))
   (csv (>= 2.3))))
@@ -26,6 +28,7 @@
  (name gendarme-ezjsonm)
  (synopsis "Libraries to marshal OCaml data structures (JSON [Ezjsonm])")
  (description "This package allows to marshal OCaml data structures to JSON using Ezjsonm")
+ (maintenance_intent "(latest)")
  (depends
   (ppx_marshal_ext (= :version))
   (ezjsonm (>= 1.1.0))))
@@ -33,12 +36,15 @@
 (package
  (name gendarme-json)
  (synopsis "Libraries to marshal OCaml data structures (JSON metapackage)")
- (description "Metapackage for JSON marshalling using Gendarme"))
+ (description "Metapackage for JSON marshalling using Gendarme")
+ (allow_empty)
+ (maintenance_intent "(latest)"))
 
 (package
  (name gendarme-toml)
  (synopsis "Libraries to marshal OCaml data structures (TOML)")
  (description "This package allows to marshal OCaml data structures to TOML")
+ (maintenance_intent "(latest)")
  (depends
   (ppx_marshal_ext (= :version))
   (toml (>= 7.1.0))))
@@ -47,6 +53,7 @@
  (name gendarme-yaml)
  (synopsis "Libraries to marshal OCaml data structures (YAML)")
  (description "This package allows to marshal OCaml data structures to YAML")
+ (maintenance_intent "(latest)")
  (depends
   (ppx_marshal_ext (= :version))
   (yaml (>= 3.0.1))))
@@ -55,6 +62,7 @@
  (name gendarme-yojson)
  (synopsis "Libraries to marshal OCaml data structures (JSON [Yojson])")
  (description "This package allows to marshal OCaml data structures to JSON using Yojson")
+ (maintenance_intent "(latest)")
  (depends
   (ppx_marshal_ext (= :version))
   (yojson (>= 1.6.0))))
@@ -63,6 +71,7 @@
  (name ppx_marshal)
  (synopsis "Preprocessor extension to marshal OCaml types")
  (description "This package provides a preprocessor extension to automatically define marshallers for OCaml types")
+ (maintenance_intent "(latest)")
  (depends
   (alcotest :with-test)
   (gendarme (= :version))
@@ -78,6 +87,7 @@
  (name ppx_marshal_ext)
  (synopsis "Preprocessor extension to simplify writing Gendarme encoders")
  (description "This package provides a preprocessor extension for lazy programmers to save a few lines of code when writing Gendarme encoders")
+ (maintenance_intent "(latest)")
  (depends
   (gendarme (= :version))
   (ocaml (>= 4.13.0))
