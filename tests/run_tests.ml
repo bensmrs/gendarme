@@ -304,17 +304,6 @@ let test_records_yaml () =
   check string "t5l0>" "[]\n" M1.([%encode.Yaml] ~v:[] (Gendarme.list t5));
   check bool "t5l0<" true M1.([%decode.Yaml] ~v:"[]" (Gendarme.list t5) = [])
 
-(** Test optional field name feature *)
-let test_no_field_name () =
-  let module Gendarme_json = Gendarme_yojson in
-  let module M = struct
-    include Gendarme_json.Prelude
-    type t = { foo: int [@json]; bar: string [@json] } [@@marshal]
-    let v = { foo = 42; bar = "foo" }
-  end in
-  check string "t>" "{\"foo\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v t);
-  check bool "t<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t = v)
-
 (** This module defines interesting cases to check variant marshalling *)
 module M2' (Gendarme_json : JSON) = struct
   include Gendarme_json.Prelude
@@ -437,7 +426,7 @@ let test_variants_yaml () =
   check bool "t5 1<" true M2.([%decode.Yaml] ~v:"- Foo5\n- foo: 1\n" t5 = v5);
   check bool "t5 2<" true M2.([%decode.Yaml] ~v:"- Bar5\n- foo: 2\n  bar: 3.1\n" t5 = v5')
 
-(** This module defines interesting cases to check variant marshalling *)
+(** This module defines interesting cases to check proxies *)
 module M3 = struct
   type t1 = int Seq.t [@@marshal] [@@warning "-34"]
   let v1 = Seq.(cons 5 empty |> cons 4 |> cons 3 |> cons 2 |> cons 1)
@@ -460,7 +449,7 @@ end
 (** Check whether two seqs are equal *)
 let seq_eq s s' = List.for_all2 (=) (List.of_seq s) (List.of_seq s')
 
-(** A few tests for the proxy feature with CSV<JSON> *)
+(** A few proxy tests with CSV<JSON> *)
 let test_proxies_csv_json () =
   check string "t1>" "1\n2\n3\n4\n5\n" M3.([%encode.Csv.Json] ~v:v1 t1);
   check bool "t1<" true M3.([%decode.Csv.Json] ~v:"1\n2\n3\n4\n5" t1 |> seq_eq v1);
@@ -481,7 +470,7 @@ let test_proxies_csv_json () =
   let s = M3.([%decode.Csv.Json] ~v:csv t4 |> Hashtbl.to_seq) in
   check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
-(** A few tests for the proxy feature with JSON *)
+(** A few proxy tests with JSON *)
 let test_proxies_json (module Gendarme_json : JSON) () =
   check string "t1>" "[1,2,3,4,5]" M3.([%encode.Json] ~v:v1 t1);
   check bool "t1<" true M3.([%decode.Json] ~v:"[1,2,3,4,5]" t1 |> seq_eq v1);
@@ -502,7 +491,7 @@ let test_proxies_json (module Gendarme_json : JSON) () =
   let s = M3.([%decode.Json] ~v:json t4 |> Hashtbl.to_seq) in
   check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
-(** A few tests for the proxy feature with TOML *)
+(** A few proxy tests with TOML *)
 let test_proxies_toml () =
   check string "t1>" "__value = [1, 2, 3, 4, 5]\n" M3.([%encode.Toml] ~v:v1 t1);
   check bool "t1<" true M3.([%decode.Toml] ~v:"__value=[1,2,3,4,5]" t1 |> seq_eq v1);
@@ -520,7 +509,7 @@ let test_proxies_toml () =
   (* An implementation bug in the Toml library prevents us to perform the [t4<] test *)
   ()
 
-(** A few tests for the proxy feature with YAML *)
+(** A few proxy tests with YAML *)
 let test_proxies_yaml () =
   check string "t1>" "- 1\n- 2\n- 3\n- 4\n- 5\n" M3.([%encode.Yaml] ~v:v1 t1);
   check bool "t1<" true M3.([%decode.Yaml] ~v:"[1,2,3,4,5]" t1 |> seq_eq v1);
@@ -541,23 +530,90 @@ let test_proxies_yaml () =
   let s = M3.([%decode.Yaml] ~v:yaml t4 |> Hashtbl.to_seq) in
   check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
-(** Transcoding tests between JSON and YAML *)
-let test_transcode_json_yaml () =
+(** This is a hack to have the tests pass on OCaml < 5.1 *)
+module HashableInt = struct
+  include Gendarme.Int
+  let hash i = i
+end
+
+(** This module defines interesting cases to check wrapped modules marshalling *)
+module M4 = struct
+  let s = Seq.(cons (3, 5) empty |> cons (1, 2))
+  let s' = Seq.(cons (1, 2) empty |> cons (3, 5))
+  module M1 = Gendarme.Map.Make (Gendarme.Int)
+  let v1 = M1.of_seq s
+  module M2 = Gendarme.Hashtbl.Make (HashableInt)
+  let v2 = M2.of_seq s
+  module M3 = Gendarme.Set.Make (Gendarme.Int)
+  let v3 = M3.of_list [1; 2; 3; 5; 8]
+end
+
+(** A few wrapper tests with CSV<JSON> *)
+let test_wrappers_csv_json () =
+  let csv = "1,3\n2,5\n" in
+  check string "M1.t>" csv M4.(M1.t Gendarme.int |> [%encode.Csv.Json] ~v:v1);
+  M4.(M1.t Gendarme.int |> [%decode.Csv.Json] ~v:csv |> M1.to_seq |> seq_eq s)
+  |> check bool "M1.t<" true;
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let csv' = "3,1\n5,2\n" in
+  let s = M4.(M2.t Gendarme.int |> [%encode.Csv.Json] ~v:v2) in
+  check bool "M2.t>" true (s = csv || s = csv');
+  let s = M4.(M2.t Gendarme.int |> [%decode.Csv.Json] ~v:csv |> M2.to_seq) in
+  check bool "M2.t<" true (seq_eq s M4.s || seq_eq s M4.s');
+  check string "M3.t>" "1\n2\n3\n5\n8\n" M4.([%encode.Csv.Json] ~v:v3 M3.t);
+  check bool "M3.t<" true M4.([%decode.Csv.Json] ~v:"1\n2\n3\n5\n8" M3.t |> M3.equal v3)
+
+(** A few wrapper tests with JSON *)
+let test_wrappers_json (module Gendarme_json : JSON) () =
+  let json = "{\"1\":2,\"3\":5}" in
+  check string "M1.t>" json M4.(M1.t Gendarme.int |> [%encode.Json] ~v:v1);
+  check bool "M1.t<" true M4.(M1.t Gendarme.int |> [%decode.Json] ~v:json |> M1.to_seq |> seq_eq s);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let json' = "{\"3\":5,\"1\":2}" in
+  let s = M4.(M2.t Gendarme.int |> [%encode.Json] ~v:v2) in
+  check bool "M2.t>" true (s = json || s = json');
+  let s = M4.(M2.t Gendarme.int |> [%decode.Json] ~v:json |> M2.to_seq) in
+  check bool "M2.t<" true (seq_eq s M4.s || seq_eq s M4.s');
+  check string "M3.t>" "[1,2,3,5,8]" M4.([%encode.Json] ~v:v3 M3.t);
+  check bool "M3.t<" true M4.([%decode.Json] ~v:"[1,2,3,5,8]" M3.t |> M3.equal v3)
+
+(** A few wrapper tests with TOML *)
+let test_wrappers_toml () =
+  let toml = "1 = 2\n3 = 5\n" in
+  check string "M1.t>" toml M4.(M1.t Gendarme.int |> [%encode.Toml] ~v:v1);
+  (* An implementation bug in the Toml library prevents us to perform the [M1.t<] test *)
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let toml' = "3 = 5\n1 = 2\n" in
+  let s = M4.(M2.t Gendarme.int |> [%encode.Toml] ~v:v2) in
+  check bool "M2.t>" true (s = toml || s = toml');
+  (* An implementation bug in the Toml library prevents us to perform the [M2.t<] test *)
+  check string "M3.t>" "__value = [1, 2, 3, 5, 8]\n" M4.([%encode.Toml] ~v:v3 M3.t);
+  check bool "M3.t<" true M4.([%decode.Toml] ~v:"__value=[1,2,3,5,8]" M3.t |> M3.equal v3)
+
+(** A few wrapper tests with YAML *)
+let test_wrappers_yaml () =
+  let yaml = "\"1\": 2\n\"3\": 5\n" in
+  check string "M1.t>" yaml M4.(M1.t Gendarme.int |> [%encode.Yaml] ~v:v1);
+  check bool "M1.t<" true M4.(M1.t Gendarme.int |> [%decode.Yaml] ~v:yaml |> M1.to_seq |> seq_eq s);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let yaml' = "\"3\": 5\n\"1\": 2\n" in
+  let s = M4.(M2.t Gendarme.int |> [%encode.Yaml] ~v:v2) in
+  check bool "M2.t>" true (s = yaml || s = yaml');
+  let s = M4.(M2.t Gendarme.int |> [%decode.Yaml] ~v:yaml |> M2.to_seq) in
+  check bool "M2.t<" true (seq_eq s M4.s || seq_eq s M4.s');
+  check string "M3.t>" "- 1\n- 2\n- 3\n- 5\n- 8\n" M4.([%encode.Yaml] ~v:v3 M3.t);
+  check bool "M3.t<" true M4.([%decode.Yaml] ~v:"[1,2,3,5,8]" M3.t |> M3.equal v3)
+
+(** Test optional field name feature *)
+let test_no_field_name () =
   let module Gendarme_json = Gendarme_yojson in
   let module M = struct
     include Gendarme_json.Prelude
-    (** Recursive type *)
-    type t = { t_foo: int list [@json "foo"] [@yaml "foo"];
-               t_bar: t list [@json "bar"] [@yaml "bar"] } [@@marshal]
+    type t = { foo: int [@json]; bar: string [@json] } [@@marshal]
+    let v = { foo = 42; bar = "foo" }
   end in
-  let json = "{\"foo\":[42,12],\"bar\":[{\"foo\":[12],\"bar\":[]}]}" in
-  let yaml = "foo:\n- 42\n- 12\nbar:\n- foo:\n  - 12\n  bar: []\n" in
-  check string "JSON>JSON" json ([%transcode Json => Json] ~v:json M.t);
-  check string "JSON>YAML" yaml ([%transcode Json => Yaml] ~v:json M.t);
-  check string "JSON<YAML" json ([%transcode Json <= Yaml] ~v:yaml M.t);
-  check string "YAML<YAML" yaml ([%transcode Yaml <= Yaml] ~v:yaml M.t);
-  [%remarshal Json => Yaml] ~v:(Yojson.Safe.from_string json) M.t |> Yaml.to_string_exn
-  |> check string "JSON>YAML" yaml
+  check string "t>" "{\"foo\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v t);
+  check bool "t<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t = v)
 
 (** Test default value feature *)
 let test_default_values () =
@@ -604,6 +660,24 @@ let test_safe_mode () =
   check bool "t2''<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2'' = v2'');
   check bool "t2'''<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2''' = v2''');
   check bool "t3<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t3 = v3)
+
+(** Transcoding tests between JSON and YAML *)
+let test_transcode_json_yaml () =
+  let module Gendarme_json = Gendarme_yojson in
+  let module M = struct
+    include Gendarme_json.Prelude
+    (** Recursive type *)
+    type t = { t_foo: int list [@json "foo"] [@yaml "foo"];
+               t_bar: t list [@json "bar"] [@yaml "bar"] } [@@marshal]
+  end in
+  let json = "{\"foo\":[42,12],\"bar\":[{\"foo\":[12],\"bar\":[]}]}" in
+  let yaml = "foo:\n- 42\n- 12\nbar:\n- foo:\n  - 12\n  bar: []\n" in
+  check string "JSON>JSON" json ([%transcode Json => Json] ~v:json M.t);
+  check string "JSON>YAML" yaml ([%transcode Json => Yaml] ~v:json M.t);
+  check string "JSON<YAML" json ([%transcode Json <= Yaml] ~v:yaml M.t);
+  check string "YAML<YAML" yaml ([%transcode Yaml <= Yaml] ~v:yaml M.t);
+  [%remarshal Json => Yaml] ~v:(Yojson.Safe.from_string json) M.t |> Yaml.to_string_exn
+  |> check string "JSON>YAML" yaml
 
 (** Test exceptions raised by [Gendarme] *)
 let test_exceptions () =
@@ -659,6 +733,11 @@ let () =
       modularize ("test_proxies_json", `Quick, test_proxies_json) json @
       [("test_proxies_toml", `Quick, test_proxies_toml);
        ("test_proxies_yaml", `Quick, test_proxies_yaml)]);
+    ("wrappers",
+      ("test_wrappers_csv_json", `Quick, test_wrappers_csv_json)::
+      modularize ("test_wrappers_json", `Quick, test_wrappers_json) json @
+      [("test_wrappers_toml", `Quick, test_wrappers_toml);
+       ("test_wrappers_yaml", `Quick, test_wrappers_yaml)]);
     ("features", [
       ("test_no_field_name", `Quick, test_no_field_name);
       ("test_default_values", `Quick, test_default_values);

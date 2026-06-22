@@ -73,11 +73,41 @@ let get : type a. ?v:a -> a ty -> a = fun ?v t -> match v with
   | Some v -> v
 
 let int () = Int
+module Int = struct
+  include Int
+  let t = int
+end
+
 let float () = Float
+module Float = struct
+  include Float
+  let t = float
+end
+
 let string () = String
+module String = struct
+  include String
+  let t = string
+end
+
 let bool () = Bool
+module Bool = struct
+  include Bool
+  let t = bool
+end
+
 let list a () = List a
+module List = struct
+  include List
+  let t = list
+end
+
 let option a () = Option a
+module Option = struct
+  include Option
+  let t = option
+end
+
 let empty_list () = Empty_list
 let tuple2 a b () = Tuple2 (a, b)
 let pair = tuple2
@@ -92,22 +122,64 @@ let quintuple = tuple5
 
 let map a b () = Map (a, b)
 
-module Seq = struct
-  type 'a t = 'a Seq.t
-  let t t () = Proxy { p_wit = list t; p_get = List.of_seq; p_put = List.to_seq }
+let _map = map
+module Map = struct
+  include Map
+  module type OrderedType = sig
+    include OrderedType
+    val t: t ty
+  end
+  module Make (Ord : OrderedType) = struct
+    include Make (Ord)
+    let t a () = Proxy { p_wit = _map Ord.t a; p_get = (fun m -> to_seq m |> List.of_seq);
+                         p_put = (fun l -> List.to_seq l |> of_seq) }
+  end
 end
 
 type 'a seq = 'a Seq.t
-let seq = Seq.t
-
-module Hashtbl = struct
-  type ('a, 'b) t = ('a, 'b) Hashtbl.t
-  let t t t' () = Proxy { p_wit = map t t';
-                          p_get = (fun m -> Hashtbl.to_seq m |> List.of_seq);
-                          p_put = (fun l -> List.to_seq l |> Hashtbl.of_seq) }
+let seq a () = Proxy { p_wit = list a; p_get = List.of_seq; p_put = List.to_seq }
+module Seq = struct
+  include Seq
+  let t = seq
 end
 
-let hashtbl = Hashtbl.t
+type ('a, 'b) hashtbl = ('a, 'b) Hashtbl.t
+let hashtbl a b () = Proxy { p_wit = map a b; p_get = (fun m -> Hashtbl.to_seq m |> List.of_seq);
+                             p_put = (fun l -> List.to_seq l |> Hashtbl.of_seq) }
+module Hashtbl = struct
+  include Hashtbl
+  module type HashedType = sig
+    include HashedType
+    val t: t ty
+  end
+  module type SeededHashedType = sig
+    include SeededHashedType
+    val t: t ty
+  end
+  module Make (H : HashedType) = struct
+    include Make (H)
+    let t a () = Proxy { p_wit = map H.t a; p_get = (fun m -> to_seq m |> List.of_seq);
+                         p_put = (fun l -> List.to_seq l |> of_seq) }
+  end
+  module MakeSeeded (H : SeededHashedType) = struct
+    include MakeSeeded (H)
+    let t a () = Proxy { p_wit = map H.t a; p_get = (fun m -> to_seq m |> List.of_seq);
+                         p_put = (fun l -> List.to_seq l |> of_seq) }
+  end
+  let t = hashtbl
+end
+
+module Set = struct
+  include Set
+  module type OrderedType = sig
+    include OrderedType
+    val t: t ty
+  end
+  module Make (Ord : OrderedType) = struct
+    include Make (Ord)
+    let t () = Proxy { p_wit = list Ord.t; p_get = elements; p_put = of_list }
+  end
+end
 
 let marshal : type a b. (module M with type t = a) -> ?v:b -> b ty -> a
             = fun (module M) ?v ty -> match ty () with

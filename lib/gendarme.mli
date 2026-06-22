@@ -121,82 +121,181 @@ val assoc: encoder -> ?v:'a -> 'a o_lens -> (string * target) list
 val deassoc: encoder -> 'a o_lens -> (string * target) list -> 'a
 
 (** [int] witness *)
-val int: unit -> int t
+val int: int ty
+
+(** [Int] module wrapper *)
+module Int : sig
+  include module type of Int
+
+  (** [Int.t] witness builder *)
+  val t: t ty
+end
 
 (** [float] witness *)
-val float: unit -> float t
+val float: float ty
+
+(** [Float] module wrapper *)
+module Float : sig
+  include module type of Float
+
+  (** [Float.t] witness builder *)
+  val t: t ty
+end
 
 (** [string] witness *)
-val string: unit -> string t
+val string: string ty
+
+(** [String] module wrapper *)
+module String : sig
+  include module type of String
+
+  (** [String.t] witness builder *)
+  val t: t ty
+end
 
 (** [bool] witness *)
-val bool: unit -> bool t
+val bool: bool ty
+
+(** [Bool] module wrapper *)
+module Bool : sig
+  include module type of Bool
+
+  (** [Bool.t] witness builder *)
+  val t: t ty
+end
 
 (** ['a list] witness builder *)
-val list: 'a ty -> unit -> 'a list t
+val list: 'a ty -> 'a list ty
+
+(** [List] module wrapper *)
+module List : sig
+  include module type of List
+
+  (** ['a List.t] witness builder *)
+  val t: 'a ty -> 'a t ty
+end
 
 (** ['a option] witness builder *)
-val option: 'a ty -> unit -> 'a option t
+val option: 'a ty -> 'a option ty
+
+(** [Option] module wrapper *)
+module Option : sig
+  include module type of Option
+
+  (** ['a Option.t] witness builder *)
+  val t: 'a ty -> 'a t ty
+end
 
 (** Empty ['a list] witness *)
-val empty_list: unit -> string list t
+val empty_list: string list ty
 
 (** [('a * 'b)] witness builder *)
-val tuple2: 'a ty -> 'b ty -> unit -> ('a * 'b) t
+val tuple2: 'a ty -> 'b ty -> ('a * 'b) ty
 
 (** Alias for [tuple2] *)
-val pair: 'a ty -> 'b ty -> unit -> ('a * 'b) t
+val pair: 'a ty -> 'b ty -> ('a * 'b) ty
 
 (** Alias for [tuple2] *)
-val double: 'a ty -> 'b ty -> unit -> ('a * 'b) t
+val double: 'a ty -> 'b ty -> ('a * 'b) ty
 
 (** Alias for [tuple2] *)
-val couple: 'a ty -> 'b ty -> unit -> ('a * 'b) t
+val couple: 'a ty -> 'b ty -> ('a * 'b) ty
 
 (** [('a * 'b * 'c)] witness builder *)
-val tuple3: 'a ty -> 'b ty -> 'c ty -> unit -> ('a * 'b * 'c) t
+val tuple3: 'a ty -> 'b ty -> 'c ty -> ('a * 'b * 'c) ty
 
 (** Alias for [tuple3] *)
-val triple: 'a ty -> 'b ty -> 'c ty -> unit -> ('a * 'b * 'c) t
+val triple: 'a ty -> 'b ty -> 'c ty -> ('a * 'b * 'c) ty
 
 (** [('a * 'b * 'c * 'd)] witness builder *)
-val tuple4: 'a ty -> 'b ty -> 'c ty -> 'd ty -> unit -> ('a * 'b * 'c * 'd) t
+val tuple4: 'a ty -> 'b ty -> 'c ty -> 'd ty -> ('a * 'b * 'c * 'd) ty
 
 (** Alias for [tuple4] *)
-val quadruple: 'a ty -> 'b ty -> 'c ty -> 'd ty -> unit -> ('a * 'b * 'c * 'd) t
+val quadruple: 'a ty -> 'b ty -> 'c ty -> 'd ty -> ('a * 'b * 'c * 'd) ty
 
 (** [('a * 'b * 'c * 'd * 'e)] witness builder *)
-val tuple5: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> unit -> ('a * 'b * 'c * 'd * 'e) t
+val tuple5: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> ('a * 'b * 'c * 'd * 'e) ty
 
 (** Alias for [tuple5] *)
-val quintuple: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> unit -> ('a * 'b * 'c * 'd * 'e) t
+val quintuple: 'a ty -> 'b ty -> 'c ty -> 'd ty -> 'e ty -> ('a * 'b * 'c * 'd * 'e) ty
 
 (** [(key, value)] map witness builder *)
-val map: 'a ty -> 'b ty -> unit -> ('a * 'b) list t
+val map: 'a ty -> 'b ty -> ('a * 'b) list ty
+
+(** [Map] module wrapper *)
+module Map : sig
+  include module type of Map
+  module type OrderedType = sig
+    include OrderedType
+    val t: t ty
+  end
+  module Make (Ord : OrderedType) : sig
+    include module type of Make (Ord)
+
+    (** ['a Map.Make(Ord).t] witness builder *)
+    val t: 'a ty -> 'a t ty
+  end
+end
 
 (** ['a Seq.t] alias *)
 type 'a seq = 'a Seq.t
 
 (** ['a Seq.t] witness builder *)
-val seq: 'a ty -> unit -> 'a Seq.t t
+val seq: 'a ty -> 'a seq ty
 
-(** [Seq] module emulation *)
+(** [Seq] module wrapper *)
 module Seq : sig
-  (** ['a Seq.t] witness builder *)
-  val t: 'a ty -> unit -> 'a Seq.t t
+  include module type of Seq
 
-  (** ['a Seq.t] alias *)
-  type 'a t = 'a Seq.t
+  (** ['a Seq.t] witness builder *)
+  val t: 'a ty -> 'a t ty
 end
 
+(** [('a, 'b) Hashtbl.t] alias *)
+type ('a, 'b) hashtbl = ('a, 'b) Hashtbl.t
+
 (** [('a, 'b) Hashtbl.t] witness builder *)
-val hashtbl: 'a ty -> 'b ty -> unit -> ('a, 'b) Hashtbl.t t
+val hashtbl: 'a ty -> 'b ty -> ('a, 'b) Hashtbl.t ty
 
-(** [Hashtbl] module emulation *)
+(** [Hashtbl] module wrapper *)
 module Hashtbl : sig
-  (** [('a, 'b) Hashtbl.t] witness builder *)
-  val t: 'a ty -> 'b ty -> unit -> ('a, 'b) Hashtbl.t t
+  include module type of Hashtbl
+  module type HashedType = sig
+    include HashedType
+    val t: t ty
+  end
+  module type SeededHashedType = sig
+    include SeededHashedType
+    val t: t ty
+  end
+  module Make (H : HashedType) : sig
+    include module type of Make (H)
 
-  (** [('a, 'b) Hashtbl.t] alias *)
-  type ('a, 'b) t = ('a, 'b) Hashtbl.t
+    (** [Hashtbl.Make(H).t] witness builder *)
+    val t: 'a ty -> 'a t ty
+  end
+  module MakeSeeded (H : SeededHashedType) : sig
+    include module type of MakeSeeded (H)
+
+    (** [Hashtbl.MakeSeeded(H).t] witness builder *)
+    val t: 'a ty -> 'a t ty
+  end
+
+  (** [('a, 'b) Hashtbl.t] witness builder *)
+  val t: 'a ty -> 'b ty -> ('a, 'b) t ty
+end
+
+(** [Set] module wrapper *)
+module Set : sig
+  include module type of Set
+  module type OrderedType = sig
+    include OrderedType
+    val t: t ty
+  end
+  module Make (Ord : OrderedType) : sig
+    include module type of Make (Ord)
+
+    (** [Set.Make(Ord).t] witness builder *)
+    val t: t ty
+  end
 end
