@@ -2,9 +2,6 @@
 
 open Alcotest
 
-(* Load CSV<;Yaml;Yojson>, TOML and YAML encoders *)
-[%%marshal.load Csv; Csv (Yaml); Csv (Yojson); Toml; Yaml]
-
 (** To be extra safe, we completely shadow Gendarme_json *)
 module Gendarme_json = struct end
 

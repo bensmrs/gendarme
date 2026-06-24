@@ -6,6 +6,7 @@ open Util
 open Compat
 
 type marshal_args = { safe : bool; disallow_unknown_fields : bool }
+let encoders = ref []
 
 (** Check if the current attribute list contains [marshal] and parse its parameters *)
 let get_marshal_attr =
@@ -319,6 +320,22 @@ let visitor = object (self)
   method! signature = List.fold_left (fun acc item -> acc @ self#signature_item' item) []
 end
 
+(** Prepend implementation files with the globally-declared encoders’ loaders *)
+let enclose_impl loc =
+  let loc = Option.value ~default:Location.none loc in
+  let cons_of_encoder e = match String.split_on_char '.' e with
+    | [] -> failwith "Unreachable"
+    | hd::tl -> List.map (fun e -> construct_e ~loc e []) tl |> construct_e ~loc hd in
+  let rec enclose_impl_rec = function
+    | [] -> failwith "Unreachable"
+    | hd::[] -> cons_of_encoder hd
+    | hd::tl -> enclose_impl_rec tl |> pexp_sequence ~loc (cons_of_encoder hd) in
+  match !encoders with
+  | [] -> ([], [])
+  | l ->
+      ([pstr_extension ~loc (Loc.make ~loc "marshal.load",
+                             PStr [pstr_eval ~loc (enclose_impl_rec l) []]) []], [])
+
 (** Build simple [Gendarme_<encoder>.<function>] expressions *)
 let build_encoder_expr f ~loc ~path:_ ~arg = match arg with
   | Some ({ txt = Lident m; loc }) -> dot ~loc [gendarmize m; f]
@@ -391,5 +408,8 @@ let cfuns = [("transcode", "decode", "encode"); ("remarshal", "unmarshal", "mars
 
 (** And we finally register everything *)
 let () =
-  Driver.register_transformation "ppx_marshal" ~impl:visitor#structure ~intf:visitor#signature
+  Driver.add_arg "--with-encoders" (String (fun enc -> encoders := String.split_on_char ',' enc))
+                 ~doc:"comma-separated list of encoders to automatically load";
+  Driver.register_transformation "ppx_marshal" ~enclose_impl
+    ~impl:visitor#structure ~intf:visitor#signature
     ~extensions:(loader::List.map build_encoder_ext efuns @ List.map build_converter_ext cfuns)
