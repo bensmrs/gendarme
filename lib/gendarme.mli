@@ -120,6 +120,9 @@ val assoc: encoder -> ?v:'a -> 'a o_lens -> (string * target) list
 (** Helper function to simplify unmarshalling records *)
 val deassoc: encoder -> 'a o_lens -> (string * target) list -> 'a
 
+(** Helper function to wrap unsafe type casts *)
+val cast: ('a -> 'b) -> 'a -> 'b
+
 (** [int] witness *)
 val int: int ty
 

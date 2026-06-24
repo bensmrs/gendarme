@@ -210,3 +210,5 @@ let assoc e ?v o =
   List.filter_map (fun (e', k as x) -> if e = e' then Some (k, o.o_get r x) else None) o.o_fds
 
 let deassoc e o l = List.fold_left (fun r (field, v) -> o.o_put r (e, field) v) o.o_def l
+
+let cast f v = try f v with _ -> raise Type_error

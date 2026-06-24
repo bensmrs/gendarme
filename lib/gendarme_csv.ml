@@ -16,10 +16,10 @@ let marshal_common : type a. ?v:a -> a ty -> Csv.t = fun ?v ty -> match ty () wi
 (** To avoid repeating code, these unmarshalling paths are used by both the safe modular and
     functorial encoders *)
 let unmarshal_common : type a. ?v:Csv.t -> a ty -> a = fun ?v ty -> match ty (), v with
-  | Int, Some [[s]] -> int_of_string s
-  | Float, Some [[s]] -> Float.of_string s
+  | Int, Some [[s]] -> cast int_of_string s
+  | Float, Some [[s]] -> cast Float.of_string s
   | String, Some [[s]] -> s
-  | Bool, Some [[s]] -> bool_of_string s
+  | Bool, Some [[s]] -> cast bool_of_string s
   | _, Some _ -> raise Type_error
   | _, None -> failwith "Unreachable"
 

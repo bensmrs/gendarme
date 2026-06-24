@@ -58,10 +58,10 @@ module%encoder M = struct
          unmarshal ~v:ve e)
     | Object o, Some (`Assoc l) -> List.map (fun (k, v) -> (k, pack v)) l |> deassoc t o
     | Map (a, b), Some (`Assoc l) -> begin match a () with
-        | Int -> List.map (fun (k, v) -> (int_of_string k, unmarshal ~v b)) l
-        | Float -> List.map (fun (k, v) -> (Float.of_string k, unmarshal ~v b)) l
+        | Int -> List.map (fun (k, v) -> (cast int_of_string k, unmarshal ~v b)) l
+        | Float -> List.map (fun (k, v) -> (cast Float.of_string k, unmarshal ~v b)) l
         | String -> List.map (fun (k, v) -> (k, unmarshal ~v b)) l
-        | Bool -> List.map (fun (k, v) -> (bool_of_string k, unmarshal ~v b)) l
+        | Bool -> List.map (fun (k, v) -> (cast bool_of_string k, unmarshal ~v b)) l
         | _ -> raise Unimplemented_case
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty

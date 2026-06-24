@@ -135,18 +135,18 @@ module%encoder M = struct
         | Int ->
             Toml.Types.Table.bindings tb
             |> List.map (fun (k, v) ->
-                 (Toml.Types.Table.Key.to_string k |> int_of_string, unmarshal ~v b))
+                 (Toml.Types.Table.Key.to_string k |> cast int_of_string, unmarshal ~v b))
         | Float ->
             Toml.Types.Table.bindings tb
             |> List.map (fun (k, v) ->
-                 (Toml.Types.Table.Key.to_string k |> Float.of_string, unmarshal ~v b))
+                 (Toml.Types.Table.Key.to_string k |> cast Float.of_string, unmarshal ~v b))
         | String ->
             Toml.Types.Table.bindings tb
             |> List.map (fun (k, v) -> (Toml.Types.Table.Key.to_string k, unmarshal ~v b))
         | Bool ->
             Toml.Types.Table.bindings tb
             |> List.map (fun (k, v) ->
-                 (Toml.Types.Table.Key.to_string k |> bool_of_string, unmarshal ~v b))
+                 (Toml.Types.Table.Key.to_string k |> cast bool_of_string, unmarshal ~v b))
         | _ -> raise Unimplemented_case
       end
     | _ -> Gendarme.unmarshal (module M) ?v ty
