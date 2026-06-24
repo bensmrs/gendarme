@@ -19,9 +19,9 @@ let unmarshal_common : type a. ?v:Csv.t -> a ty -> a = fun ?v ty -> match ty (),
   | Int, Some [[s]] -> int_of_string s
   | Float, Some [[s]] -> Float.of_string s
   | String, Some [[s]] -> s
-  | String, Some _ -> raise Type_error (** This one is critical to properly parse n-ary tuples *)
   | Bool, Some [[s]] -> bool_of_string s
-  | _, _ -> failwith "Unreachable"
+  | _, Some _ -> raise Type_error
+  | _, None -> failwith "Unreachable"
 
 module%encoder M = struct
   let marshal : type a. ?v:a -> a ty -> t = fun ?v ty -> match ty () with
