@@ -59,7 +59,7 @@ For now, `Gendarme` can encode data in the following formats:
 
 | Format | Library | Internal type | Remarks |
 |---|---|---|---|
-| CSV | [OCaml CSV](https://opam.ocaml.org/packages/csv/) | `Csv.t` | This is a functorial encoder, supposed to be used in combination with a modular encoder. A sane choice is to combine it with JSON.
+| CSV | [OCaml CSV](https://opam.ocaml.org/packages/csv/) | `Csv.t` | This is a functorial encoder, supposed to be used in combination with a modular encoder for complex types (*e.g.* tuples of records). A sane choice is to combine it with JSON.
 | JSON | [Ezjsonm](https://opam.ocaml.org/packages/ezjsonm/) | `Ezjsonm.value`
 || [Yojson](https://opam.ocaml.org/packages/yojson/) | `Yojson.Safe.t` |
 | TOML | [toml](https://opam.ocaml.org/packages/toml/) | `Toml.Types.value` | Limited support due to problems within the Toml library. Non-record values are wrapped to conform to TOML.
@@ -100,13 +100,29 @@ val baz : unit -> (string * foo) list Gendarme.t = <fun>
 [%%marshal.load Yojson; Yaml]
 ```
 
-Mixing several implementations of the same data format (e.g. Ezjsonm + Yojson) is not recommended.
+Mixing several implementations of the same data format (*e.g.* Ezjsonm + Yojson) is not recommended.
 
-Functorial encoders such as the CSV encoder require a little more care, as you need to load both the modular and the functorial interfaces. For example, to load the CSV encoder with a Yojson fallback,
+You can also load encoders globally by passing a comma-separated list of lowercase encoder names to the `--with-encoders` PPX flag:
+
+```lisp
+(preprocess (pps ppx_marshal -- --with-encoders yojson,yaml))
+```
+
+#### Functorial encoders
+
+Loading functorial encoders is done by passing their fallback encoder as a parameter. For example, to load the CSV encoder with a Yojson fallback,
 
 ```ocaml
-[%%marshal.load Csv; Csv (Yojson)]
+[%%marshal.load Csv (Yojson)]
 ```
+
+or, globally (notice the dotted syntax),
+
+```lisp
+(preprocess (pps ppx_marshal -- --with-encoders csv.yojson))
+```
+
+Keep in mind that functorial encoders have a modular counterpart, so if you don’t need support for complex types, loading the non-functorized version is recommended.
 
 ### Marshalling
 
