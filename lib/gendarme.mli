@@ -54,7 +54,7 @@ module type M = sig
   val unmarshal_safe : ?v:t -> 'a ty -> 'a
 end
 
-(** Encoder signature *)
+(** Modular encoder signature *)
 module type S = sig
   include M
 
@@ -66,6 +66,16 @@ module type S = sig
 
   (** Decode a value from its string representation *)
   val decode: ?v:string -> 'a ty -> 'a
+end
+
+(** Functorial encoder signature *)
+module type F = sig
+  include S
+
+  (** Modular encoder builder *)
+  module Make (_ : S) : sig
+    include S
+  end
 end
 
 (** Record marshalling lens type *)

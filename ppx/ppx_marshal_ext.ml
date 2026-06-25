@@ -109,30 +109,38 @@ let declare_target_ext =
     [("marshal.target", false); ("marshal.target.partial", true)]
 
 (** Rewrite the extension node to declare the encoder signature *)
-let process' loc lid arg_loc arg =
+let process' ~partial loc lid arg_loc arg =
   let l x = Loc.make ~loc x in
   let path = Ldot (lident "Gendarme", "encoder") |> l in
   let cons = [Pwith_type (lident "t" |> l,
                           ptyp_constr ~loc lid [] |> tdecl ~loc ~name:(l "t"))] in
-  let constructors = [extension_constructor ~loc:arg_loc ~name:(l arg)
-                                            ~kind:(ekind [])] in
+  let constructor = extension_constructor ~loc:arg_loc ~name:(l arg) ~kind:(ekind []) in
+  let (constructors, sig_) = match partial with
+    | false -> ([constructor], "S")
+    | true ->
+        let kind = ekind [ptyp_constr ~loc (Ldot (lident "Gendarme", "encoder") |> l) []] in
+        ([constructor; extension_constructor ~loc:arg_loc ~name:(l (arg ^ "__")) ~kind], "F") in
   let type_ = pmty_signature ~loc [psig_typext ~loc (text ~loc ~path ~constructors)] in
-  [psig_include ~loc (pmty_with ~loc (mtid ~loc "Gendarme" "S") cons |> include_infos ~loc);
+  [psig_include ~loc (pmty_with ~loc (mtid ~loc "Gendarme" sig_) cons |> include_infos ~loc);
    psig_module ~loc (module_declaration ~loc ~name:(Some "Prelude" |> l) ~type_)]
 
 (** Handle PPX arguments *)
-let declare_target' ~loc ~path:_ ~arg lid = match arg with
-  | Some ({ txt = Lident arg; loc = arg_loc }) -> process' loc lid arg_loc arg
+let declare_target' ~partial ~loc ~path:_ ~arg lid = match arg with
+  | Some ({ txt = Lident arg; loc = arg_loc }) -> process' ~partial loc lid arg_loc arg
   | Some { loc; _ } -> err' ~loc "expected a valid non-prefixed constructor"
   | None -> err' ~loc "expected a constructor"
 
 (** Declare the extension *)
 let declare_target_ext' =
-  Extension.(declare_inline_with_path_arg "marshal.target" Context.signature_item)
-    Ast_pattern.(pstr (pstr_eval (pexp_ident __') nil ^:: nil)) declare_target'
+  List.map
+    (fun (name, partial) ->
+       declare_target' ~partial
+       |> Extension.(declare_inline_with_path_arg name Context.signature_item)
+            Ast_pattern.(pstr (pstr_eval (pexp_ident __') nil ^:: nil)))
+    [("marshal.target", false); ("marshal.target.partial", true)]
 
 (** Handle PPX arguments *)
-let declare_encoder ~partial ~loc ~path:_ ~arg name str = match (partial, arg) with
+let declare_encoder ~partial ~unsafe ~loc ~path:_ ~arg name str = match (partial, arg) with
   | true, None ->
       [pstr_extension ~loc (Location.error_extensionf ~loc "[%s] %s" "%%marshal.encoder.partial"
                                                            "expected an encoder argument") []]
@@ -155,7 +163,7 @@ let declare_encoder ~partial ~loc ~path:_ ~arg name str = match (partial, arg) w
             (* include E *)
             include_ ~loc "E" in
 
-      let aliases = match partial with
+      let aliases = match unsafe with
         | true -> []
         | false ->
             (* let marshal_safe = marshal *)
@@ -182,16 +190,17 @@ let declare_encoder ~partial ~loc ~path:_ ~arg name str = match (partial, arg) w
 (** Declare module%marshal.encoder *)
 let declare_encoder_ext =
   List.map
-    (fun (name, partial) ->
+    (fun (name, partial, unsafe) ->
        let str pat =
          let expr = Ast_pattern.(pmod_structure __') in
          Ast_pattern.(pstr ((pat (module_binding ~name:(some __') ~expr)) ^:: nil)) in
-       declare_encoder ~partial
+       declare_encoder ~partial ~unsafe
        |> Extension.(declare_inline_with_path_arg name Context.structure_item)
             Ast_pattern.(alt (str pstr_module) (str (fun x -> pstr_recmodule (x ^:: nil)))))
-    [("marshal.encoder", false); ("marshal.encoder.partial", true)]
+    [("marshal.encoder", false, false); ("marshal.encoder.partial", true, true);
+     ("marshal.encoder.unsafe", false, true)]
 
 (** Register the extension *)
 let () =
-  let extensions = declare_encoder_ext @ declare_target_ext @ [declare_target_ext'] in
+  let extensions = declare_encoder_ext @ declare_target_ext @ declare_target_ext' in
   Driver.register_transformation "ppx_marshal_ext" ~extensions

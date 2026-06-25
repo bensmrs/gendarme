@@ -26,6 +26,13 @@ module type S = sig
   val decode : ?v:string -> 'a ty -> 'a
 end
 
+module type F = sig
+  include S
+  module Make (_ : S) : sig
+    include S
+  end
+end
+
 type 'a o_lens = { o_fds: (encoder * string) list; o_get: 'a -> encoder * string -> target;
                    o_put: 'a -> encoder * string -> target -> 'a; o_def: 'a }
 

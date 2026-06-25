@@ -39,15 +39,34 @@ end
 let modularize (suite, kind, f) =
   List.map (fun (name, m) -> (suite ^ " (" ^ name ^ ")", kind, f m))
 
-(** A few simple tests with CSV<>. We make here absolutely no effort for completeness on the modular
-    version of this encoder *)
+(** A few simple tests with CSV<> *)
 let test_simple_types_csv () =
   check string "int>" "42\n" ([%encode.Csv] ~v:42 Gendarme.int);
   check string "string>" "42\n" ([%encode.Csv] ~v:"42" Gendarme.string);
   check string "bool>" "true\n" ([%encode.Csv] ~v:true Gendarme.bool);
-  (*  *)
+  check string "float list>" "1.2\n3.4\n" ([%encode.Csv] ~v:[1.2; 3.4] Gendarme.(list float));
+  check (list int) "int list<" [1; 2; 3; 4] ([%decode.Csv] ~v:"1\n2\n3\n4" Gendarme.(list int));
+  check string "empty list 1>" "" ([%encode.Csv] ~v:[] Gendarme.(list int));
+  check string "empty list 2>" "" ([%encode.Csv] ~v:[] Gendarme.(empty_list));
+  check (list int) "empty list 1<" [] ([%decode.Csv] ~v:"" Gendarme.(list int));
+  check (list string) "empty list 2<" [] ([%decode.Csv] ~v:"" Gendarme.(empty_list));
   let v = [%encode.Csv] ~v:42 Gendarme.int in
-  [%decode.Csv] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.
+  check (float 1e-8) "int>float" 42. ([%decode.Csv] ~v Gendarme.float);
+  check string "int option 1>" "42\n" ([%encode.Csv] ~v:(Some 42) Gendarme.(option int));
+  check string "int option 2>" "" ([%encode.Csv] ~v:None Gendarme.(option int));
+  check (option int) "int option 1<" (Some 42) ([%decode.Csv] ~v:"42" Gendarme.(option int));
+  check (option int) "int option 2<" None ([%decode.Csv] ~v:"" Gendarme.(option int));
+  [%encode.Csv] ~v:(1, "b", 3) Gendarme.(triple int string int)
+  |> check string "int * string * int>" "1,b,3\n";
+  [%decode.Csv] ~v:"1,b,3" Gendarme.(triple int string int)
+  |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  [%encode.Csv] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
+  |> check string "(int * string) list 1>" "42,foo\n123,bar\n";
+  [%decode.Csv] ~v:"42,foo\n123,bar" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
+  check string "(int * string) list 2>" "" ([%encode.Csv] ~v:[] Gendarme.(pair int string |> list));
+  [%decode.Csv] ~v:"" Gendarme.(pair int string |> list)
+  |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** A few simple tests with CSV<JSON> *)
 let test_simple_types_csv_json () =
@@ -93,7 +112,7 @@ let test_simple_types_csv_yaml () =
   check (list int) "empty list 1<" [] ([%decode.Csv.Yaml] ~v:"" Gendarme.(list int));
   check (list string) "empty list 2<" [] ([%decode.Csv.Yaml] ~v:"" Gendarme.(empty_list));
   let v = [%encode.Csv.Yaml] ~v:42 Gendarme.int in
-  [%decode.Csv.Yaml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check (float 1e-8) "int>float" 42. ([%decode.Csv.Yaml] ~v Gendarme.float);
   check string "int option 1>" "42\n" ([%encode.Csv.Yaml] ~v:(Some 42) Gendarme.(option int));
   check string "int option 2>" "" ([%encode.Csv.Yaml] ~v:None Gendarme.(option int));
   check (option int) "int option 1<" (Some 42) ([%decode.Csv.Yaml] ~v:"42" Gendarme.(option int));
@@ -123,7 +142,7 @@ let test_simple_types_json (module Gendarme_json : JSON) () =
   check (list int) "empty list 1<" [] ([%decode.Json] ~v:"[]" Gendarme.(list int));
   check (list string) "empty list 2<" [] ([%decode.Json] ~v:"[]" Gendarme.(empty_list));
   let v = [%encode.Json] ~v:42 Gendarme.int in
-  [%decode.Json] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check (float 1e-8) "int>float" 42. ([%decode.Json] ~v Gendarme.float);
   check string "int option 1>" "42" ([%encode.Json] ~v:(Some 42) Gendarme.(option int));
   check string "int option 2>" "null" ([%encode.Json] ~v:None Gendarme.(option int));
   check (option int) "int option 1<" (Some 42) ([%decode.Json] ~v:"42" Gendarme.(option int));
@@ -155,7 +174,7 @@ let test_simple_types_toml () =
   check (list int) "empty list 1<" [] ([%decode.Toml] ~v:"__value=[]" Gendarme.(list int));
   check (list string) "empty list 2<" [] ([%decode.Toml] ~v:"__value=[]" Gendarme.(empty_list));
   let v = [%encode.Toml] ~v:42 Gendarme.int in
-  [%decode.Toml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check (float 1e-8) "int>float" 42. ([%decode.Toml] ~v Gendarme.float);
   [%encode.Toml] ~v:(Some 42) Gendarme.(option int)
   |> check string "int option 1>" "__value = [42]\n";
   check string "int option 2>" "__value = []\n" ([%encode.Toml] ~v:None Gendarme.(option int));
@@ -189,7 +208,7 @@ let test_simple_types_yaml () =
   check (list int) "empty list 1<" [] ([%decode.Yaml] ~v:"[]" Gendarme.(list int));
   check (list string) "empty list 2<" [] ([%decode.Yaml] ~v:"[]" Gendarme.(empty_list));
   let v = [%encode.Yaml] ~v:42 Gendarme.int in
-  [%decode.Yaml] ~v Gendarme.float |> check (float 1e-8) "int>float" 42.;
+  check (float 1e-8) "int>float" 42. ([%decode.Yaml] ~v Gendarme.float);
   check string "int option 1>" "42\n" ([%encode.Yaml] ~v:(Some 42) Gendarme.(option int));
   check string "int option 2>" "\n" ([%encode.Yaml] ~v:None Gendarme.(option int));
   check (option int) "int option 1<" (Some 42) ([%decode.Yaml] ~v:"42" Gendarme.(option int));
@@ -210,28 +229,39 @@ let test_simple_types_yaml () =
 (** This module defines interesting cases to check record marshalling *)
 module M1' (Gendarme_json : JSON) = struct
   include Gendarme_json.Prelude
-  type t1 = { t1_foo: int [@csv.json "foo"] [@csv.yaml "bar"] [@json "foo"] [@yaml "foo"]
-                          [@toml "foo"] } [@@marshal]
+  type t1 = { t1_foo: int [@csv "xxx"] [@csv.json "foo"] [@csv.yaml "bar"] [@json "foo"]
+                          [@yaml "foo"] [@toml "foo"] } [@@marshal]
   let v1 = { t1_foo = 42 }
-  type t2 = { t2_foo: int [@csv.json "foo"] [@json "foo"];
-              t2_bar: float [@csv.json "bar"] [@yaml "bar"];
-              t3_baz: string [@csv.json "baz"] [@toml "baz"] } [@@marshal]
+  type t2 = { t2_foo: int [@csv "foo"] [@csv.json "foo"] [@json "foo"];
+              t2_bar: float [@csv "bar"] [@csv.json "bar"] [@yaml "bar"];
+              t3_baz: string [@csv "baz"] [@csv.json "baz"] [@toml "baz"] } [@@marshal]
   let v2 = { t2_foo = 42; t2_bar = 1.1; t3_baz = "foo" }
-  type t3 = { t3_foo: int [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
-              t3_bar: float [@csv.json "bar"] [@json "bar"] [@yaml "bar"] [@toml "bar"] }
-            [@@marshal]
+  type t3 = { t3_foo: int [@csv "foo"] [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
+              t3_bar: float [@csv "bar"] [@csv.json "bar"] [@json "bar"] [@yaml "bar"]
+                            [@toml "bar"] } [@@marshal]
   let v3 = { t3_foo = 42; t3_bar = 1.1 }
   type t4 = { t4_foo: int [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
               t4_bar: t1 [@csv.json "bar"] [@json "bar"] [@yaml "bar"] [@toml "bar"] } [@@marshal]
   let v4 = { t4_foo = 42; t4_bar = { t1_foo = 42 } }
-  type t5 = { t5_foo: int [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
-              t5_bar: int * string [@csv.json "bar"] [@json "bar"] [@yaml "bar"] [@toml "bar"] }
-            [@@marshal]
+  type t5 = { t5_foo: int [@csv "foo"] [@csv.json "foo"] [@json "foo"] [@yaml "foo"] [@toml "foo"];
+              t5_bar: int * string [@csv "bar"] [@csv.json "bar"] [@json "bar"] [@yaml "bar"]
+                                   [@toml "bar"] } [@@marshal]
   let v5 = { t5_foo = 42; t5_bar = (1, "bar") }
   let v5' = { t5_foo = 123; t5_bar = (3, "baz") }
 end
 
 module M1 = M1' (Gendarme_yojson)
+
+(** A few record tests with CSV<> *)
+let test_records_csv () =
+  check string "t1>" "xxx\n42\n" M1.([%encode.Csv] ~v:v1 t1);
+  check string "t2>" "foo,bar,baz\n42,1.1,foo\n" M1.([%encode.Csv] ~v:v2 t2);
+  check string "t3>" "foo,bar\n42,1.1\n" M1.([%encode.Csv] ~v:v3 t3);
+  check bool "t3<" true M1.([%decode.Csv] ~v:"foo,bar\n42,1.1" t3 = v3);
+  (* [t4] and [t5] tests are a type error in the modular CSV encoder, with the very specific
+     exception of empty lists *)
+  check string "t5l0>" "foo,bar\n" M1.([%encode.Csv] ~v:[] (Gendarme.list t5));
+  check bool "t5l0<" true M1.([%decode.Csv] ~v:"foo,bar" (Gendarme.list t5) = [])
 
 (** A few record tests with CSV<JSON> *)
 let test_records_csv_json () =
@@ -314,7 +344,7 @@ module M2' (Gendarme_json : JSON) = struct
   type t3 = Foo3 of t3 list | Bar3 of M1.t5 [@@marshal]
   let v3 = Foo3 [Foo3 []]
   let v3' = Bar3 { t5_foo = 42; t5_bar = (12, "foo") }
-  type t4 = { foo4: t2 [@csv.json] [@json] [@yaml] [@toml] [@default Foo2] } [@@marshal]
+  type t4 = { foo4: t2 [@csv] [@csv.json] [@json] [@yaml] [@toml] [@default Foo2] } [@@marshal]
   let v4 = { foo4 = Foo2 }
   let v4' = { foo4 = Bar2 (2, "foo") }
   type t5 = Foo5 of M1.t1 | Bar5 of M1.t3 [@@marshal]
@@ -323,6 +353,22 @@ module M2' (Gendarme_json : JSON) = struct
 end
 
 module M2 = M2' (Gendarme_yojson)
+
+(** A few variant tests with CSV<> *)
+let test_variants_csv () =
+  check string "t1 1>" "Foo1\n" M2.([%encode.Csv] ~v:v1 t1);
+  check string "t1 2>" "Bar1\n" M2.([%encode.Csv] ~v:v1' t1);
+  check bool "t1 1<" true M2.([%decode.Csv] ~v:"Foo1" t1 = v1);
+  check bool "t1 2<" true M2.([%decode.Csv] ~v:"Bar1" t1 = v1');
+  check string "t2 1>" "Foo2\n" M2.([%encode.Csv] ~v:v2 t2);
+  check string "t2 2>" "Bar2,42,bar\n" M2.([%encode.Csv] ~v:v2' t2);
+  check bool "t2 1<" true M2.([%decode.Csv] ~v:"Foo2" t2 = v2);
+  check bool "t2 2<" true M2.([%decode.Csv] ~v:"Bar2,42,bar" t2 = v2');
+  (* [t3] tests are a type error in the modular CSV encoder *)
+  check string "t4 1>" "foo4\nFoo2\n" M2.([%encode.Csv] ~v:v4 t4);
+  check bool "t4 1<" true M2.([%decode.Csv] ~v:"foo4\nFoo2" t4 = v4)
+  (* [t4 2] tests are a type error in the modular CSV encoder *)
+  (* [t5] tests are a type error in the modular CSV encoder *)
 
 (** A few variant tests with CSV<JSON> *)
 let test_variants_csv_json () =
@@ -389,10 +435,9 @@ let test_variants_toml () =
   check bool "t2 2<" true M2.([%decode.Toml] ~v:"__value=[[\"Bar2\"],[42],[\"bar\"]]" t2 = v2');
   M2.([%encode.Toml] ~v:v3 t3)
   |> check string "t3 1>" "__value = [[\"Foo3\"], [[[[\"Foo3\"], [[]]]]]]\n";
-  (* An implementation bug in the Toml library prevents us to perform the [t3 2>] test *)
   M2.([%decode.Toml] ~v:"__value = [[\"Foo3\"],[[[[\"Foo3\"],[[]]]]]]" t3 = v3)
   |> check bool "t3 1<" true;
-  (* An implementation bug in the Toml library prevents us to perform the [t3 2<] test *)
+  (* An implementation bug in the Toml library prevents us to perform the [t3 2] tests *)
   check string "t4 1>" "foo4 = \"Foo2\"\n" M2.([%encode.Toml] ~v:v4 t4);
   check string "t4 2>" "foo4 = [[\"Bar2\"], [2], [\"foo\"]]\n" M2.([%encode.Toml] ~v:v4' t4);
   check bool "t4 1<" true M2.([%decode.Toml] ~v:"foo4=\"Foo2\"" t4 = v4);
@@ -445,6 +490,23 @@ end
 
 (** Check whether two seqs are equal *)
 let seq_eq s s' = List.for_all2 (=) (List.of_seq s) (List.of_seq s')
+
+(** A few proxy tests with CSV<> *)
+let test_proxies_csv () =
+  check string "t1>" "1\n2\n3\n4\n5\n" M3.([%encode.Csv] ~v:v1 t1);
+  check bool "t1<" true M3.([%decode.Csv] ~v:"1\n2\n3\n4\n5" t1 |> seq_eq v1);
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let csv = "foo,bar\n42,12\n" in
+  let csv' = "bar,foo\n12,42\n" in
+  check bool "t2>" true M3.(let s = [%encode.Csv] ~v:v2 t2 in s = csv || s = csv');
+  let s = M3.([%decode.Csv] ~v:csv t2 |> Hashtbl.to_seq) in
+  check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
+  let csv = "1.1,2.5\n42,12\n" in
+  let csv' = "2.5,1.1\n12,42\n" in
+  check bool "t3>" true M3.(let s = [%encode.Csv] ~v:v3 t3 in s = csv || s = csv');
+  let s = M3.([%decode.Csv] ~v:csv t3 |> Hashtbl.to_seq) in
+  check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3')
+  (* [t4] tests are a type error in the modular CSV encoder *)
 
 (** A few proxy tests with CSV<JSON> *)
 let test_proxies_csv_json () =
@@ -500,11 +562,8 @@ let test_proxies_toml () =
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
   let toml = "\"1.1\" = 42\n\"2.5\" = 12\n" in
   let toml' = "\"2.5\" = 12\n\"1.1\" = 42\n" in
-  check bool "t3>" true M3.(let s = [%encode.Toml] ~v:v3 t3 in s = toml || s = toml');
-  (* An implementation bug in the Toml library prevents us to perform the [t3<] test *)
-  (* An implementation bug in the Toml library prevents us to perform the [t4>] test *)
-  (* An implementation bug in the Toml library prevents us to perform the [t4<] test *)
-  ()
+  check bool "t3>" true M3.(let s = [%encode.Toml] ~v:v3 t3 in s = toml || s = toml')
+  (* An implementation bug in the Toml library prevents us to perform the [t3<] and [t4] tests *)
 
 (** A few proxy tests with YAML *)
 let test_proxies_yaml () =
@@ -544,6 +603,21 @@ module M4 = struct
   module M3 = Gendarme.Set.Make (Gendarme.Int)
   let v3 = M3.of_list [1; 2; 3; 5; 8]
 end
+
+(** A few wrapper tests with CSV<> *)
+let test_wrappers_csv () =
+  let csv = "1,3\n2,5\n" in
+  check string "M1.t>" csv M4.(M1.t Gendarme.int |> [%encode.Csv] ~v:v1);
+  M4.(M1.t Gendarme.int |> [%decode.Csv] ~v:csv |> M1.to_seq |> seq_eq s)
+  |> check bool "M1.t<" true;
+  (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
+  let csv' = "3,1\n5,2\n" in
+  let s = M4.(M2.t Gendarme.int |> [%encode.Csv] ~v:v2) in
+  check bool "M2.t>" true (s = csv || s = csv');
+  let s = M4.(M2.t Gendarme.int |> [%decode.Csv] ~v:csv |> M2.to_seq) in
+  check bool "M2.t<" true (seq_eq s M4.s || seq_eq s M4.s');
+  check string "M3.t>" "1\n2\n3\n5\n8\n" M4.([%encode.Csv] ~v:v3 M3.t);
+  check bool "M3.t<" true M4.([%decode.Csv] ~v:"1\n2\n3\n5\n8" M3.t |> M3.equal v3)
 
 (** A few wrapper tests with CSV<JSON> *)
 let test_wrappers_csv_json () =
@@ -669,10 +743,12 @@ let test_transcode_json_yaml () =
   end in
   let json = "{\"foo\":[42,12],\"bar\":[{\"foo\":[12],\"bar\":[]}]}" in
   let yaml = "foo:\n- 42\n- 12\nbar:\n- foo:\n  - 12\n  bar: []\n" in
-  check string "JSON>JSON" json ([%transcode Json => Json] ~v:json M.t);
-  check string "JSON>YAML" yaml ([%transcode Json => Yaml] ~v:json M.t);
-  check string "JSON<YAML" json ([%transcode Json <= Yaml] ~v:yaml M.t);
-  check string "YAML<YAML" yaml ([%transcode Yaml <= Yaml] ~v:yaml M.t);
+  check string "JSON->JSON" json ([%transcode Json => Json] ~v:json M.t);
+  check string "JSON->YAML" yaml ([%transcode Json => Yaml] ~v:json M.t);
+  check string "JSON<-YAML" json ([%transcode Json <= Yaml] ~v:yaml M.t);
+  check string "YAML<-YAML" yaml ([%transcode Yaml <= Yaml] ~v:yaml M.t);
+  [%transcode Csv.Json => Csv.Json] ~v:"1,2,3" Gendarme.(tuple3 int int int)
+  |> check string "CSV<JSON>->CSV<JSON>" "1,2,3\n";
   [%remarshal Json => Yaml] ~v:(Yojson.Safe.from_string json) M.t |> Yaml.to_string_exn
   |> check string "JSON>YAML" yaml
 
@@ -716,21 +792,25 @@ let () =
       [("test_simple_types_toml", `Quick, test_simple_types_toml);
        ("test_simple_types_yaml", `Quick, test_simple_types_yaml)]);
     ("records",
+      ("test_records_csv", `Quick, test_records_csv)::
       ("test_records_csv_json", `Quick, test_records_csv_json)::
       modularize ("test_records_json", `Quick, test_records_json) json @
       [("test_records_toml", `Quick, test_records_toml);
        ("test_records_yaml", `Quick, test_records_yaml)]);
     ("variants",
+      ("test_variants_csv", `Quick, test_variants_csv)::
       ("test_variants_csv_json", `Quick, test_variants_csv_json)::
       modularize ("test_variants_json", `Quick, test_variants_json) json @
       [("test_variants_toml", `Quick, test_variants_toml);
        ("test_variants_yaml", `Quick, test_variants_yaml)]);
     ("proxies",
+      ("test_proxies_csv", `Quick, test_proxies_csv)::
       ("test_proxies_csv_json", `Quick, test_proxies_csv_json)::
       modularize ("test_proxies_json", `Quick, test_proxies_json) json @
       [("test_proxies_toml", `Quick, test_proxies_toml);
        ("test_proxies_yaml", `Quick, test_proxies_yaml)]);
     ("wrappers",
+      ("test_wrappers_csv", `Quick, test_wrappers_csv)::
       ("test_wrappers_csv_json", `Quick, test_wrappers_csv_json)::
       modularize ("test_wrappers_json", `Quick, test_wrappers_json) json @
       [("test_wrappers_toml", `Quick, test_wrappers_toml);

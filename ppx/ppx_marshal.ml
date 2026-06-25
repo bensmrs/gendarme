@@ -351,12 +351,12 @@ let build_encoder_ext f =
 
 (** Build converter expressions *)
 let build_converter_expr ~loc ~path:_ name f f' op x y =
+  let make_path f x = Loc.make ~loc (String.concat "." (f::Astlib.Longident.flatten x)) in
   let ext from to_ =
-    apply_v ~loc (pexp_extension ~loc (Loc.make ~loc (f' ^ "." ^ cap to_), PStr []))
-            (evar ~loc "%v") (evar ~loc "%t")
+    apply_v ~loc (pexp_extension ~loc (make_path f' to_, PStr [])) (evar ~loc "%v") (evar ~loc "%t")
     |> let' ~loc Nonrecursive (pvar ~loc "%v")
-         (apply_v ~loc (pexp_extension ~loc (Loc.make ~loc (f ^ "." ^ cap from), PStr []))
-                  (evar ~loc "%v") (evar ~loc "%t"))
+         (apply_v ~loc (pexp_extension ~loc (make_path f from, PStr [])) (evar ~loc "%v")
+                                            (evar ~loc "%t"))
     |> pexp_fun ~loc Nolabel None (pvar ~loc "%t")
     |> pexp_fun ~loc (Labelled "v") None (pvar ~loc "%v") in
   match op.txt with
@@ -371,8 +371,8 @@ let build_converter_ext (name, f, f') =
   build_converter_expr name f f'
   |> Extension.(declare name Context.expression)
        Ast_pattern.(pstr_eval (pexp_apply (lident __' |> pexp_ident)
-         ((pexp_construct (lident __) none |> no_label)
-          ^:: (pexp_construct (lident __) none |> no_label) ^:: nil)) nil ^:: nil |> pstr)
+         ((pexp_construct (__) none |> no_label)
+          ^:: (pexp_construct (__) none |> no_label) ^:: nil)) nil ^:: nil |> pstr)
 
 (** Build loader structures *)
 let build_loader ~loc:_ ~path:_ =
