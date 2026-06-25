@@ -379,7 +379,7 @@ let build_loader ~loc:_ ~path:_ =
   let rec build_loader_rec acc = function
   | { pexp_desc = Pexp_construct ({ txt = Lident m; loc }, None); _ } ->
       (open_infos ~expr:(Ldot (gendarmize m |> lident, "Prelude") |> Loc.make ~loc
-                         |> pmod_ident ~loc) ~loc ~override:Fresh |> pstr_open ~loc)::acc
+                         |> pmod_ident ~loc) ~loc ~override:Override |> pstr_open ~loc)::acc
   | { pexp_desc = Pexp_construct ({ txt = Lident m; loc }, Some
         { pexp_desc = Pexp_construct ({ txt = Lident m'; loc = loc' }, None); _ });
       pexp_loc = loc''; _ } ->
@@ -387,6 +387,8 @@ let build_loader ~loc:_ ~path:_ =
       let me = pmod_ident ~loc (Ldot (gendarmize m |> lident, "Make") |> Loc.make ~loc) in
       let me' = pmod_ident ~loc:loc' (gendarmize m' |> lident_t ~loc:loc') in
       let expr = pmod_apply ~loc:loc'' me me' in
+      (open_infos ~expr:(Ldot (gendarmize m |> lident, "Prelude") |> Loc.make ~loc
+                         |> pmod_ident ~loc) ~loc ~override:Override |> pstr_open ~loc)::
       (module_binding ~loc:loc'' ~name:(Loc.make ~loc:loc'' (Some name)) ~expr |>
        pstr_module ~loc:loc'')::acc
   | { pexp_desc = Pexp_sequence (hd, tl); _ } ->

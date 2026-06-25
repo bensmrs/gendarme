@@ -2,4 +2,4 @@
  (name run_tests)
  (package ppx_marshal)
  (libraries alcotest gendarme gendarme-csv gendarme-ezjsonm gendarme-toml gendarme-yaml gendarme-yojson)
- (preprocess (pps ppx_marshal -- --with-encoders csv,csv.yaml,csv.yojson,toml,yaml)))
+ (preprocess (pps ppx_marshal -- --with-encoders csv.yaml,csv.yojson,toml,yaml)))
