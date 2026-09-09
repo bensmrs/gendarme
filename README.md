@@ -16,12 +16,20 @@ type t = { t_foo: int list [@json "foo"] [@yaml "foo"];
            t_bar: t list [@json "bar"] } [@@marshal]
 type u = t * int [@@marshal]
 
-let v = ({ t_foo = [1; 2]; t_bar = [{ t_foo = [3; 4]; t_bar = [] }] }, 3)
+let () =
+  let v = ({ t_foo = [1; 2]; t_bar = [{ t_foo = [3; 4]; t_bar = [] }] }, 3) in
+  Printf.printf "JSON: %s\nYAML:\n%s\n" ([%encode.Json] ~v u) ([%encode.Yaml] ~v u)
+```
 
-let json = [%encode.Json] ~v u
-(*
-val json : string = "[{\"foo\":[1,2],\"bar\":[{\"foo\":[3,4],\"bar\":[]}]},3]"
-*)
+```console
+# ocamlfind ocamlc -o test -package ppx_marshal,gendarme-yaml,gendarme-yojson -linkpkg test.ml
+# ./test
+JSON: [{"foo":[1,2],"bar":[{"foo":[3,4],"bar":[]}]},3]
+YAML:
+- foo:
+  - 1
+  - 2
+- 3
 ```
 
 ### Supported OCaml types
