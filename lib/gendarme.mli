@@ -23,6 +23,7 @@ type _ t = ..
 
 (** Extensible type to register new encoding targets *)
 type target = ..
+type target += T__skip
 
 (** Extensible type to register new encoders *)
 type encoder = ..

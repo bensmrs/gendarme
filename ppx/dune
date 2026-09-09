@@ -2,7 +2,7 @@
  (name ppx_marshal)
  (public_name ppx_marshal)
  (libraries ppxlib)
- (modules compat ppx_marshal util)
+ (modules config compat ppx_marshal util)
  (kind ppx_rewriter))
 
 (library

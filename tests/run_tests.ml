@@ -732,6 +732,70 @@ let test_safe_mode () =
   check bool "t2'''<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2''' = v2''');
   check bool "t3<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t3 = v3)
 
+(** Test default value omission feature *)
+let test_omit_default () =
+  let module Gendarme_json = Gendarme_yojson in
+  let module M = struct
+    include Gendarme_json.Prelude
+    type t1 = { t1_foo: int [@json "foo"] [@default 42];
+                t1_bar: string [@json "bar"] } [@@marshal { omit_default }]
+    let v1 = { t1_foo = 42; t1_bar = "foo" }
+    let v1' = { t1_foo = 42; t1_bar = "" }
+    let v1'' = { t1_foo = 0; t1_bar = "foo" }
+    type t2 = { t2_foo: int [@json "foo"] [@default 42] [@omit_default true];
+                t2_bar: string [@json "bar"] } [@@marshal]
+    let v2 = { t2_foo = 42; t2_bar = "foo" }
+    let v2' = { t2_foo = 42; t2_bar = "" }
+    let v2'' = { t2_foo = 0; t2_bar = "foo" }
+    type t3 = { t3_foo: int [@json "foo"] [@yaml omit_default] [@default 42] [@omit_default];
+                t3_bar: string [@json "bar"; { omit_default }] [@yaml "bar"] } [@@marshal]
+    let v3 = { t3_foo = 42; t3_bar = "foo" }
+    let v3' = { t3_foo = 42; t3_bar = "" }
+    let v3'' = { t3_foo = 0; t3_bar = "foo" }
+    type t4 = { t4_foo: int [@json "foo"] [@yaml { omit_default = true }] [@default 42];
+                t4_bar: string [@json "bar"] [@yaml "bar"; { omit_default = false }] }
+              [@@marshal omit_default]
+    let v4 = { t4_foo = 42; t4_bar = "foo" }
+    let v4' = { t4_foo = 42; t4_bar = "" }
+    let v4'' = { t4_foo = 0; t4_bar = "foo" }
+  end in
+  check bool "t1 1<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t1 = v1);
+  check string "t1 1>" "{\"bar\":\"foo\"}" M.([%encode.Json] ~v:v1 t1);
+  check bool "t1 2<" true M.([%decode.Json] ~v:"{}" t1 = v1');
+  check string "t1 2>" "{}" M.([%encode.Json] ~v:v1' t1);
+  check bool "t1 3<" true M.([%decode.Json] ~v:"{\"foo\":0,\"bar\":\"foo\"}" t1 = v1'');
+  check string "t1 3>" "{\"foo\":0,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v1'' t1);
+  check bool "t2 1<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t2 = v2);
+  check string "t2 1>" "{\"bar\":\"foo\"}" M.([%encode.Json] ~v:v2 t2);
+  check bool "t2 2<" true M.([%decode.Json] ~v:"{\"bar\":\"\"}" t2 = v2');
+  check string "t2 2>" "{\"bar\":\"\"}" M.([%encode.Json] ~v:v2' t2 );
+  check bool "t2 3<" true M.([%decode.Json] ~v:"{\"foo\":0,\"bar\":\"foo\"}" t2 = v2'');
+  check string "t2 3>" "{\"foo\":0,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v2'' t2);
+  check bool "t3 1j<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t3 = v3);
+  check string "t3 1j>" "{\"bar\":\"foo\"}" M.([%encode.Json] ~v:v3 t3);
+  check bool "t3 2j<" true M.([%decode.Json] ~v:"{}" t3 = v3');
+  check string "t3 2j>" "{}" M.([%encode.Json] ~v:v3' t3);
+  check bool "t3 3j<" true M.([%decode.Json] ~v:"{\"foo\":0,\"bar\":\"foo\"}" t3 = v3'');
+  check string "t3 3j>" "{\"foo\":0,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v3'' t3);
+  check bool "t3 1y<" true M.([%decode.Yaml] ~v:"bar: foo" t3 = v3);
+  check string "t3 1y>" "bar: foo\n" M.([%encode.Yaml] ~v:v3 t3);
+  check bool "t3 2y<" true M.([%decode.Yaml] ~v:"bar: \"\"" t3 = v3');
+  check string "t3 2y>" "bar: \"\"\n" M.([%encode.Yaml] ~v:v3' t3);
+  check bool "t3 3y<" true M.([%decode.Yaml] ~v:"t3_foo: 0\nbar: foo" t3 = v3'');
+  check string "t3 3y>" "t3_foo: 0\nbar: foo\n" M.([%encode.Yaml] ~v:v3'' t3);
+  check bool "t4 1j<" true M.([%decode.Json] ~v:"{\"bar\":\"foo\"}" t4 = v4);
+  check string "t4 1j>" "{\"bar\":\"foo\"}" M.([%encode.Json] ~v:v4 t4);
+  check bool "t4 2j<" true M.([%decode.Json] ~v:"{}" t4 = v4');
+  check string "t4 2j>" "{}" M.([%encode.Json] ~v:v4' t4);
+  check bool "t4 3j<" true M.([%decode.Json] ~v:"{\"foo\":0,\"bar\":\"foo\"}" t4 = v4'');
+  check string "t4 3j>" "{\"foo\":0,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v4'' t4);
+  check bool "t4 1y<" true M.([%decode.Yaml] ~v:"bar: foo" t4 = v4);
+  check string "t4 1y>" "bar: foo\n" M.([%encode.Yaml] ~v:v4 t4);
+  check bool "t4 2y<" true M.([%decode.Yaml] ~v:"bar: \"\"" t4 = v4');
+  check string "t4 2y>" "bar: \"\"\n" M.([%encode.Yaml] ~v:v4' t4);
+  check bool "t4 3y<" true M.([%decode.Yaml] ~v:"t4_foo: 0\nbar: foo" t4 = v4'');
+  check string "t4 3y>" "t4_foo: 0\nbar: foo\n" M.([%encode.Yaml] ~v:v4'' t4)
+
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
   let module Gendarme_json = Gendarme_yojson in
@@ -819,6 +883,7 @@ let () =
       ("test_no_field_name", `Quick, test_no_field_name);
       ("test_default_values", `Quick, test_default_values);
       ("test_safe_mode", `Quick, test_safe_mode);
+      ("test_omit_default", `Quick, test_omit_default);
     ]);
     ("misc", [
       ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);

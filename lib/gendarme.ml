@@ -6,6 +6,7 @@ exception Unknown_alt_default
 
 type _ t = ..
 type target = ..
+type target += T__skip
 type encoder = ..
 type 'a ty = unit -> 'a t
 
@@ -214,7 +215,10 @@ let unmarshal_safe : type a b. (module M with type t = a) -> ?v:a -> b ty -> b
 
 let assoc e ?v o =
   let r = (fun () -> Object o) |> get ?v in
-  List.filter_map (fun (e', k as x) -> if e = e' then Some (k, o.o_get r x) else None) o.o_fds
+  List.filter_map (fun (e', k as x) ->
+    if e = e'
+    then let v = o.o_get r x in if v != T__skip then Some (k, o.o_get r x) else None
+    else None) o.o_fds
 
 let deassoc e o l = List.fold_left (fun r (field, v) -> o.o_put r (e, field) v) o.o_def l
 

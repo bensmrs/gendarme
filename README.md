@@ -207,7 +207,17 @@ Because `ppx_marshal` cannot reasonably infer a default value for variant types,
 `[@@marshal]` supports a few options to tune its behavior:
 
 * `disallow_unknown_fields`, to return an error when unmarshalling fields that are not present in the target record (default: `false`);
+* `omit_default`, to ignore fields equal to their default value when marshalling (default: `false`);
 * `safe`, to require Gendarme annotations to be prefixed with `marshal.` (default: `false`).
+
+Record fields support the following options:
+
+* `default`, to set a default value in case none is provided when unmarshalling, and to tune `omit_default`’s behavior;
+* `omit_default`, to override any `omit_default` settings for a particular field.
+
+Individual record’s encoder annotations support the following option:
+
+* `omit_default`, to override any `omit_default` settings for a particular encoder in a particular field.
 
 ### Using Gendarme options
 
@@ -217,6 +227,10 @@ Gendarme options can be passed to `[@@marshal]` in two equivalent ways:
 * By writing a configuration record (*e.g.* `[@@marshal { disallow_unknown_fields; safe }]`). Note that the record fields used this way are implicitly set to `true`, but one could also explicitly write `safe = true` or `safe = false` (the only two values currently supported).
 
 For backwards compatibility reasons, we support using `[@@marshal.safe]` to set the `safe` option to `true`.
+
+In record field annotations, options can be passed by adding an attribute per option, with an optional value defaulting to `true` (`[@omit_default]` and `[@omit_default true]` are equivalent).
+
+In encoder annotations, options can be passed, like with `[@@marshal]`, either as a sequence or a record. If the annotation contains a target field name, a semicolon must be used to separate it from the options (either `[@json "foo"; omit_default]` or `[@json "foo"; { omit_default }]` can be used).
 
 ### Preventing extension clash with `safe`
 
