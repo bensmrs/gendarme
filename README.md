@@ -215,13 +215,15 @@ Because `ppx_marshal` cannot reasonably infer a default value for variant types,
 `[@@marshal]` supports a few options to tune its behavior:
 
 * `disallow_unknown_fields`, to return an error when unmarshalling fields that are not present in the target record (default: `false`);
-* `omit_default`, to ignore fields equal to their default value when marshalling (default: `false`);
-* `safe`, to require Gendarme annotations to be prefixed with `marshal.` (default: `false`).
+* `omit_default`, to ignore fields equal to their default value when marshalling a record (default: `false`);
+* `safe`, to require Gendarme annotations to be prefixed with `marshal.` (default: `false`);
+* `tag`, to provide a list of encoders to use on all the fields of a record (default: `[]`).
 
 Record fields support the following options:
 
 * `default`, to set a default value in case none is provided when unmarshalling, and to tune `omit_default`’s behavior;
-* `omit_default`, to override any `omit_default` settings for a particular field.
+* `omit_default`, to override any `omit_default` settings for a particular field;
+* `tag`, to override any `tag` settings for a particular field.
 
 Individual record’s encoder annotations support the following option:
 
@@ -231,8 +233,8 @@ Individual record’s encoder annotations support the following option:
 
 Gendarme options can be passed to `[@@marshal]` in two equivalent ways:
 
-* By writing a sequence of flags to enable (*e.g.* `[@@marshal disallow_unknown_fields; safe]`);
-* By writing a configuration record (*e.g.* `[@@marshal { disallow_unknown_fields; safe }]`). Note that the record fields used this way are implicitly set to `true`, but one could also explicitly write `safe = true` or `safe = false` (the only two values currently supported).
+* By writing a sequence of boolean flags to enable (*e.g.* `[@@marshal disallow_unknown_fields; safe]`);
+* By writing a configuration record (*e.g.* `[@@marshal { disallow_unknown_fields; safe }]`). Note that the record fields used this way are implicitly set to `true`, but one could also explicitly write `safe = true` or `safe = false`. For non-boolean flags, an explicit value must be provided.
 
 For backwards compatibility reasons, we support using `[@@marshal.safe]` to set the `safe` option to `true`.
 

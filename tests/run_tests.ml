@@ -796,6 +796,29 @@ let test_omit_default () =
   check bool "t4 3y<" true M.([%decode.Yaml] ~v:"t4_foo: 0\nbar: foo" t4 = v4'');
   check string "t4 3y>" "t4_foo: 0\nbar: foo\n" M.([%encode.Yaml] ~v:v4'' t4)
 
+(** Test automatic tagging feature *)
+let test_tag () =
+  let module Gendarme_json = Gendarme_yojson in
+  let module M = struct
+    include Gendarme_json.Prelude
+    type t1 = { t1_foo: int; t1_bar: string } [@@marshal { tag = [json; yaml; csv.json] }]
+    let v1 = { t1_foo = 42; t1_bar = "foo" }
+    type t2 = { t2_foo: int [@marshal.tag json]; t2_bar: string [@marshal.tag json; yaml] }
+              [@@marshal.safe]
+    let v2 = { t2_foo = 42; t2_bar = "foo" }
+    let v2' = { t2_foo = 0; t2_bar = "foo" }
+  end in
+  check bool "t1 j<" true M.([%decode.Json] ~v:"{\"t1_foo\":42,\"t1_bar\":\"foo\"}" t1 = v1);
+  check string "t1 j>" "{\"t1_foo\":42,\"t1_bar\":\"foo\"}" M.([%encode.Json] ~v:v1 t1);
+  check bool "t1 y<" true M.([%decode.Yaml] ~v:"t1_foo: 42\nt1_bar: foo" t1 = v1);
+  check string "t1 y>" "t1_foo: 42\nt1_bar: foo\n" M.([%encode.Yaml] ~v:v1 t1);
+  check bool "t1 c<" true M.([%decode.Csv.Json] ~v:"t1_foo,t1_bar\n42,foo" t1 = v1);
+  check string "t1 c>" "t1_foo,t1_bar\n42,foo\n" M.([%encode.Csv.Json] ~v:v1 t1);
+  check bool "t2 j<" true M.([%decode.Json] ~v:"{\"t2_foo\":42,\"t2_bar\":\"foo\"}" t2 = v2);
+  check string "t2 j>" "{\"t2_foo\":42,\"t2_bar\":\"foo\"}" M.([%encode.Json] ~v:v2 t2);
+  check bool "t2 y<" true M.([%decode.Yaml] ~v:"t2_bar: foo" t2 = v2');
+  check string "t2 y>" "t2_bar: foo\n" M.([%encode.Yaml] ~v:v2 t2)
+
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
   let module Gendarme_json = Gendarme_yojson in
@@ -884,6 +907,7 @@ let () =
       ("test_default_values", `Quick, test_default_values);
       ("test_safe_mode", `Quick, test_safe_mode);
       ("test_omit_default", `Quick, test_omit_default);
+      ("test_tag", `Quick, test_tag);
     ]);
     ("misc", [
       ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);
