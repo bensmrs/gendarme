@@ -223,6 +223,7 @@ Record fields support the following options:
 
 * `default`, to set a default value in case none is provided when unmarshalling, and to tune `omit_default`’s behavior;
 * `omit_default`, to override any `omit_default` settings for a particular field;
+* `safe`, to override any `safe` settings for a particular field;
 * `tag`, to override any `tag` settings for a particular field.
 
 Individual record’s encoder annotations support the following option:

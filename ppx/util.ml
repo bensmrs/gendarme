@@ -101,3 +101,15 @@ let guard = None
 
 (** Generate a raise expression *)
 let raise_ ~loc name args = apply ~loc (evar ~loc "raise") [construct_e ~loc name args]
+
+(** Strip a [marshal.] prefix from a located string *)
+let unmarshalize attr_name = match String.split_on_char '.' attr_name.txt with
+  | "marshal"::tl -> String.concat "." tl |> lident_t ~loc:attr_name.loc
+  | _ -> lident_t' attr_name
+
+(** Generate a warning attribute from an error extension node *)
+let attr_of_err ({ loc; _ }, payload) =
+  let payload = match payload with
+    | PStr [e] -> PStr [{ e with pstr_loc = loc }]
+    | _ -> payload in
+  attribute ~loc ~name:(Loc.make ~loc "ppwarning") ~payload

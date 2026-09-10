@@ -12,9 +12,9 @@ let encoders = ref []
 let get_marshal_attr =
   let rec get_marshal_attr_rec = function
     | [] -> false, Ok C.default
-    | hd::_ when hd.attr_name.txt = "marshal" -> true, C.parse C.default C.allowed hd
+    | hd::_ when hd.attr_name.txt = "marshal" -> true, C.parse C.default C.default_mask hd
     | hd::_ when hd.attr_name.txt = "marshal.safe" ->
-        true, C.parse C.{ default with safe = true } C.{ allowed with m_safe = Seen } hd
+        true, C.parse C.{ default with safe = true } C.{ default_mask with m_safe = Seen } hd
     | _::tl -> get_marshal_attr_rec tl in
   get_marshal_attr_rec
 
@@ -69,20 +69,12 @@ let open_module ~loc m =
 
 (** Process attributes in record fields *)
 let process_record_attrs ~conf field ty base_record type_name =
-  let rec process_record_attrs_rec (fds, get, put, def, attrs as acc) = function
+  let rec process_record_attrs_rec (fds, get, put, attrs as acc) = function
     | [] -> acc
     | attr::tl when attr.attr_name.txt = "ppwarning" ->
-        process_record_attrs_rec (fds, get, put, def, attr::attrs) tl
+        process_record_attrs_rec (fds, get, put, attr::attrs) tl
     | attr::tl when not (String.starts_with ~prefix:"marshal." attr.attr_name.txt) && conf.C.safe ->
         process_record_attrs_rec acc tl
-    | { attr_payload = PStr [{ pstr_desc = Pstr_eval (e, _); _ }]; attr_name; attr_loc }::tl
-      when attr_name.txt = "default" && not conf.safe || attr_name.txt = "marshal.default" ->
-        let attrs = match def with
-          | Some _ ->
-              warn ~loc:attr_loc
-                   ~prefix:"@default" "has been used more than once for this field"::attrs
-          | None -> attrs in
-        process_record_attrs_rec (fds, get, put, Some e, attrs) tl
     | { attr_payload = PStr l; attr_name; attr_loc = loc } as hd::tl
       when String.starts_with ~prefix:"marshal." attr_name.txt || not conf.safe ->
         let attr = match String.split_on_char '.' attr_name.txt with
@@ -119,8 +111,7 @@ let process_record_attrs ~conf field ty base_record type_name =
             [(field_l, apply_v ~loc (dot ~loc [m; "unmarshal_safe"])
                 (apply ~loc (dot ~loc [m; "unpack"]) [evar ~loc "_%v"]) ty)] base_record) in
           let fd = pexp_tuple ~loc [cons_e; a] in
-          (cons ~loc fd fds, get, put'::put, def, attrs) in
-        let mask = C.{ disallowed with m_omit_default = Allowed } in
+          (cons ~loc fd fds, get, put'::put, attrs) in
         let acc = match l with
           | [] -> process_payload ~conf (Pconst_string (field.txt, field.loc, None)) field.loc
           | [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_constant fld; pexp_loc; _ }, _); _ }] ->
@@ -129,28 +120,29 @@ let process_record_attrs ~conf field ty base_record type_name =
                                                                      pexp_loc; _ }, e); _ }, _); _ }
             ] -> begin
               let loc = e.pexp_loc in
-              match C.parse conf mask { hd with attr_payload = PStr [pstr_eval ~loc e []] } with
+              match C.parse conf C.field_encoder_mask
+                            { hd with attr_payload = PStr [pstr_eval ~loc e []] } with
               | Ok conf -> process_payload ~conf fld pexp_loc
-              | Error e -> (pexp_extension ~loc e, [], [], None, [])
+              | Error e -> (pexp_extension ~loc e, [], [], [])
             end
           | [{ pstr_desc = Pstr_eval _; _ }] -> begin
-              match C.parse conf mask hd with
+              match C.parse conf C.field_encoder_mask hd with
               | Ok conf -> process_payload ~conf (Pconst_string (field.txt, field.loc, None))
                                            field.loc
-              | Error e -> (pexp_extension ~loc e, [], [], None, [])
+              | Error e -> (pexp_extension ~loc e, [], [], [])
             end
           | _ when conf.safe ->
               let msg = "does not know how to parse this attribute" in
-              (cons ~loc (eerr_ma ~loc msg) fds, get, put, def, attrs)
+              (cons ~loc (eerr_ma ~loc msg) fds, get, put, attrs)
           | _ ->
               let msg = "is ignoring this attribute because it is not in any recognized form. \
                          Consider using [@@marshal.safe] when interacting with other preprocessor \
                          extensions." in
-              (fds, get, put, def, warn ~loc msg::attrs) in
+              (fds, get, put, warn ~loc msg::attrs) in
         process_record_attrs_rec acc tl
     | { attr_loc = loc; _ }::tl ->
         let msg = "does not know what to do with this" in
-        process_record_attrs_rec (cons ~loc (eerr_ma ~loc msg) fds, get, put, def, attrs) tl in
+        process_record_attrs_rec (cons ~loc (eerr_ma ~loc msg) fds, get, put, attrs) tl in
   process_record_attrs_rec
 
 (** Process record fields *)
@@ -159,16 +151,15 @@ let process_record ~loc ~conf base_record type_name =
     | [] -> acc
     | { pld_name; pld_type; pld_attributes = attrs; _ } as record::tl ->
         let ty = expr_of_core_type pld_type |> wrap ~loc in
-        let (conf, attrs) = C.parse_attrs conf C.{ disallowed with m_omit_default = Allowed;
-                                                                   m_tag = Allowed } attrs in
+        let (conf, attrs) = C.parse_attrs conf C.field_mask attrs in
         let attrs' = List.map (fun s -> { attr_payload = PStr []; attr_loc = s.loc;
                                           attr_name = { s with txt = "marshal." ^ s.txt } })
                               conf.tag in
-        let (fds, get, put, def_v, attrs) =
-          process_record_attrs ~conf pld_name ty base_record type_name (fds, get, put, None, [])
+        let (fds, get, put, attrs) =
+          process_record_attrs ~conf pld_name ty base_record type_name (fds, get, put, [])
                                (attrs' @ attrs) in
         let pld_attributes = List.rev attrs in
-        let def' = match def_v with
+        let def' = match conf.default with
           | Some d -> (lident_t' pld_name, d)
           | None -> (lident_t' pld_name, apply ~loc:pld_type.ptyp_loc (evar ~loc "default") [ty]
                      |> unwrap ~loc) in

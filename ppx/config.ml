@@ -1,18 +1,21 @@
 open Ppxlib
-open Ast_builder.Default
 
-type t = { safe : bool; disallow_unknown_fields : bool; omit_default : bool;
-           tag : string Loc.t list }
+type t = { default : Ppxlib.Parsetree.expression option; disallow_unknown_fields : bool;
+           omit_default : bool; safe : bool; tag : string Ppxlib.Loc.t list }
 type policy = Allowed | Disallowed | Seen
-type mask = { m_safe : policy; m_disallow_unknown_fields : policy; m_omit_default : policy;
-              m_tag : policy }
-let default = { safe = false; disallow_unknown_fields = false; omit_default = false; tag = [] }
-let allowed = { m_safe = Allowed; m_disallow_unknown_fields = Allowed; m_omit_default = Allowed;
-                m_tag = Allowed }
-let disallowed = { m_safe = Disallowed; m_disallow_unknown_fields = Disallowed;
-                   m_omit_default = Disallowed; m_tag = Disallowed }
+type mask = { m_default: policy; m_disallow_unknown_fields : policy; m_omit_default : policy;
+              m_safe : policy; m_tag : policy }
+let default = { default = None; disallow_unknown_fields = false; omit_default = false; safe = false;
+                tag = [] }
+let default_mask = { m_default = Disallowed; m_disallow_unknown_fields = Allowed;
+                     m_omit_default = Allowed; m_safe = Allowed; m_tag = Allowed }
+let field_mask = { m_default = Allowed; m_disallow_unknown_fields = Disallowed;
+                   m_omit_default = Allowed; m_safe = Allowed; m_tag = Allowed }
+let field_encoder_mask = { m_default = Disallowed; m_disallow_unknown_fields = Disallowed;
+                           m_omit_default = Allowed; m_safe = Disallowed; m_tag = Disallowed }
 
 type boxed = B of bool | S of string Loc.t | L of string Loc.t list
+           | E of Ppxlib.Parsetree.expression
 
 let put_arg v (conf, mask) = function
   | { txt = Lident arg; loc } ->
@@ -26,10 +29,12 @@ let put_arg v (conf, mask) = function
       | "disallow_unknown_fields", _ when mask.m_disallow_unknown_fields = Seen -> redefined
       | "omit_default", _ when mask.m_omit_default = Seen -> redefined
       | "tag", _ when mask.m_tag = Seen -> redefined
+      | "default", _ when mask.m_default = Seen -> redefined
       | "safe", _ when mask.m_safe = Disallowed -> disallowed
       | "disallow_unknown_fields", _ when mask.m_disallow_unknown_fields = Disallowed -> disallowed
       | "omit_default", _ when mask.m_omit_default = Disallowed -> disallowed
       | "tag", _ when mask.m_tag = Disallowed -> disallowed
+      | "default", _ when mask.m_default = Disallowed -> disallowed
       | "safe", B safe -> Ok ({ conf with safe }, { mask with m_safe = Seen })
       | "disallow_unknown_fields", B disallow_unknown_fields ->
           Ok ({ conf with disallow_unknown_fields }, { mask with m_disallow_unknown_fields = Seen })
@@ -39,8 +44,11 @@ let put_arg v (conf, mask) = function
           Ok ({ conf with tag }, { mask with m_tag = Seen })
       | "tag", S tag ->
           Ok ({ conf with tag = [tag] }, { mask with m_tag = Seen })
+      | "default", E default ->
+          Ok ({ conf with default = Some default }, { mask with m_default = Seen })
       | ("safe" | "disallow_unknown_fields" | "omit_default"), _ -> mistyped "bool"
       | "tag", _ -> mistyped "string list"
+      | "default", _ -> mistyped "expression"
       | s, _ -> Error (Util.err_ma ~loc ("does not have a " ^ s ^ " option"))
       end
   | { loc; _ } -> Error (Util.err_ma ~loc ("cannot parse this option"))
@@ -88,6 +96,7 @@ let parse conf mask { attr_payload; attr_loc = loc; _ } =
   | _ -> parse_err
 
 let parse_attrs conf mask attrs =
+  let malformed loc = Error (Util.err_ma ~loc "cannot parse this configuration") in
   let rec parse_attrs_rec (conf, mask, attrs as acc) = function
     | [] -> acc
     | { attr_payload; attr_name; attr_loc; _ }::tl
@@ -95,21 +104,24 @@ let parse_attrs conf mask attrs =
             || attr_name.txt = "omit_default" || attr_name.txt = "tag") && not conf.safe
            || attr_name.txt = "marshal.safe" || attr_name.txt = "marshal.disallow_unknown_fields"
            || attr_name.txt = "marshal.omit_default" || attr_name.txt = "marshal.tag" ->
-        let attr = match String.split_on_char '.' attr_name.txt with
-          | "marshal"::tl -> String.concat "." tl |> Util.lident_t ~loc:attr_name.loc
-          | _ -> Util.lident_t' attr_name in
+        let attr = Util.unmarshalize attr_name in
         let acc = match match attr_payload with 
             | PStr [] -> put_arg (B true) (conf, mask) attr
             | PStr ({ pstr_desc = Pstr_eval ({ pexp_loc = loc; _ } as e, _); _ }::[]) ->
                 interpret e |> Result.fold ~ok:(fun v -> put_arg v (conf, mask) attr)
                                            ~error:(fun s -> Error (Util.err_ma ~loc s))
-            | _ ->  Error (Util.err_ma ~loc:attr_loc "cannot parse this configuration") with
+            | _ -> malformed attr_loc with
           | Ok (conf, mask) -> (conf, mask, attrs)
-          | Error ({ loc; _ }, payload) ->
-              let payload = match payload with
-                | PStr [e] -> PStr [{ e with pstr_loc = loc }]
-                | _ -> payload in
-              (conf, mask, attribute ~loc ~name:(Loc.make ~loc "ppwarning") ~payload ::attrs) in
+          | Error e -> (conf, mask, Util.attr_of_err e::attrs) in
+        parse_attrs_rec acc tl
+    | { attr_payload; attr_name; attr_loc; _ }::tl
+      when attr_name.txt = "default" && not conf.safe || attr_name.txt = "marshal.default" ->
+        let acc = match match attr_payload with
+            | PStr ({ pstr_desc = Pstr_eval (e, _); _ }::[]) ->
+                Util.unmarshalize attr_name |> put_arg (E e) (conf, mask)
+            | _ -> malformed attr_loc with
+          | Ok (conf, mask) -> (conf, mask, attrs)
+          | Error e -> (conf, mask, Util.attr_of_err e::attrs) in
         parse_attrs_rec acc tl
     | hd::tl -> parse_attrs_rec (conf, mask, hd::attrs) tl in
   let (args, _, attrs) = parse_attrs_rec (conf, mask, []) attrs in
