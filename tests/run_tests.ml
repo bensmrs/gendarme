@@ -850,6 +850,29 @@ let test_tag_name () =
   check bool "t3 y<" true M.([%decode.Yaml] ~v:"foo: 42" t3 = v3');
   check string "t3 y>" "foo: 42\n" M.([%encode.Yaml] ~v:v3 t3)
 
+(** Test type variables support *)
+let test_type_variables () =
+  let module Gendarme_json = Gendarme_yojson in
+  let module M = struct
+    include Gendarme_json.Prelude
+    type 'a t1 = 'a list [@@marshal]
+    let (v1 : int t1) = [1; 2; 3]
+    type ('a, _, 'b) t2 = 'a * 'b [@@marshal]
+    let (v2 : (int, bool, string) t2) = (1, "a")
+    let v1' = [(1, "a")]
+    type 'x t3 = Foo of 'x [@@marshal]
+    let v3 = Foo "x"
+  end in
+  check bool "t1(i) j<" true M.([%decode.Json] ~v:"[1,2,3]" (t1 Gendarme.int) = v1);
+  check string "t1(i) j>" "[1,2,3]" M.([%encode.Json] ~v:v1 (t1 Gendarme.int));
+  let t2ibs = Gendarme.(M.t2 int bool string) in
+  check bool "t2(ibs) j<" true M.([%decode.Json] ~v:"[1,\"a\"]" t2ibs = v2);
+  check string "t2(ibs) j>" "[1,\"a\"]" M.([%encode.Json] ~v:v2 t2ibs);
+  check bool "t1(t2(ibs)) j<" true M.([%decode.Json] ~v:"[[1,\"a\"]]" (t1 t2ibs) = v1');
+  check string "t1(t2(ibs)) j>" "[[1,\"a\"]]" M.([%encode.Json] ~v:v1' (t1 t2ibs));
+  check bool "t3(s) j<" true M.([%decode.Json] ~v:"[\"Foo\",\"x\"]" (t3 Gendarme.string) = v3);
+  check string "t3(s) j>" "[\"Foo\",\"x\"]" M.([%encode.Json] ~v:v3 (t3 Gendarme.string))
+
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
   let module Gendarme_json = Gendarme_yojson in
@@ -940,6 +963,7 @@ let () =
       ("test_omit_default", `Quick, test_omit_default);
       ("test_tag", `Quick, test_tag);
       ("test_tag_name", `Quick, test_tag_name);
+      ("test_type_variables", `Quick, test_type_variables);
     ]);
     ("misc", [
       ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);

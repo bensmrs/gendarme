@@ -51,10 +51,10 @@ It should be noted that recursive types are supported, thus enabling to marshal 
 | Type | Example | Supported | Remarks |
 |---|---|---|---|
 | Regular type | `t` | ✓ | |
-| Parameterized type | `(a, b) t` | ✓ | Type variables are not yet supported |
+| Parameterized type | `(a, b) t` | ✓ | |
+| Type variable | `'a` | ✓ | |
 | Tuple | `a * b * c` | ✓ | Tuples are supported up to arity 5. Future versions may allow arbitrary arities. |
 | Polymorphic variant | ``[`A \| `B]`` | ✗ | Future versions will allow polymorphic variants |
-| Type variable | `'a` | ✗ | Future versions will allow type variables |
 | Object | `<a: a; b: b>` | ✗ | Future versions may allow object types |
 | Function | `a -> b` | ✗ | No support planned |
 | Class | `#a` | ✗ | No support planned |

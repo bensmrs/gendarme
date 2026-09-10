@@ -33,8 +33,8 @@ let rec expr_of_core_type = function
       let tuplen = "tuple" ^ (List.length tuple |> Int.to_string) in
       List.map (fun arg -> (Nolabel, expr_of_core_type arg |> wrap ~loc)) tuple
       |> pexp_apply ~loc (evar ~loc tuplen) |> unwrap ~loc
-  | { ptyp_desc = Ptyp_var _; ptyp_loc = loc; _ } ->
-      eerr_ma ~loc "cannot marshal type variables"
+  | { ptyp_desc = Ptyp_var v; ptyp_loc = loc; _ } ->
+      lident_t ~loc ("$" ^ v) |> pexp_ident ~loc |> unwrap ~loc
   | { ptyp_desc = Ptyp_arrow _; ptyp_loc = loc; _ } ->
       eerr_ma ~loc "cannot marshal function types"
   | { ptyp_desc = Ptyp_object _; ptyp_loc = loc; _ } ->
@@ -223,7 +223,8 @@ let process_decl ({ ptype_attributes; ptype_loc = loc; _ } as decl) =
   | _, { ptype_kind = Ptype_abstract; ptype_manifest = None; _ } ->
       let ptype_manifest = Some (terr_ma ~loc "cannot marshal abstract types" ) in
       ({ decl with ptype_manifest }, [])
-  | Ok conf, ({ ptype_name; ptype_manifest; ptype_kind; ptype_attributes; _ } as decl) ->
+  | Ok conf,
+    ({ ptype_name; ptype_manifest; ptype_kind; ptype_attributes; ptype_params; _ } as decl) ->
       let decl = { decl with ptype_attributes = remove_marshal_attr ptype_attributes } in
       let (decl, expr) = match ptype_kind with
         | Ptype_variant [] -> (decl, eerr_ma ~loc "cannot marshal empty variant types")
@@ -253,10 +254,17 @@ let process_decl ({ ptype_attributes; ptype_loc = loc; _ } as decl) =
                       ::ptype_attributes
               | _ -> ptype_attributes in
             ({ decl with ptype_kind = Ptype_record l; ptype_attributes }, obj) in
+      let expr = match ptype_params with
+        | [] -> wrap ~loc expr
+        | l ->
+            List.fold_right (fun ({ ptyp_desc; ptyp_loc = loc; _ }, _) e -> match ptyp_desc with
+              | Ptyp_any -> fun_' ~loc (ppat_any ~loc) e
+              | Ptyp_var v -> fun_ ~loc ("$" ^ v) e
+              | _ -> eerr_ma ~loc "can only marshal type variables") l (wrap ~loc expr) in
       let pat = ppat_var ~loc ptype_name in
       let attributes = [ignore_warn ~loc 33; ignore_warn ~loc 39] in
       (* This additional wrapping is needed to avoid `Gendarme' to shadow types being defined *)
-      let expr = let' ~loc Recursive pat (wrap ~loc expr) (evar ~loc:ptype_name.loc ptype_name.txt)
+      let expr = let' ~loc Recursive pat expr (evar ~loc:ptype_name.loc ptype_name.txt)
                  |> open_module ~loc (lident "Gendarme") in
       (decl, [pvb expr pat attributes loc])
 
