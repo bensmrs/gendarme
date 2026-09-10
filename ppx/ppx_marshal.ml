@@ -80,8 +80,7 @@ let process_record_attrs ~conf field ty base_record type_name =
         let attr = match String.split_on_char '.' attr_name.txt with
           | "marshal"::tl -> tl
           | l -> l in
-        let process_payload ~conf a_cst cst_loc =
-          let a = pexp_constant ~loc:cst_loc a_cst in
+        let process_payload ~conf s =
           let field_l = lident_t' field in
           let m = String.concat "__" attr |> gendarmize in
           let cons_p, cons_e = match List.rev attr with
@@ -94,8 +93,7 @@ let process_record_attrs ~conf field ty base_record type_name =
                   let name = cap c ^ "__" in
                   (construct_p ~loc:attr_name.loc name [acc_p],
                    construct_e ~loc:attr_name.loc name [acc_e])) acc tl in
-          let f_case = case ~lhs:(ppat_tuple ~loc [cons_p;
-                                                   ppat_constant ~loc:cst_loc a_cst]) in
+          let f_case = case ~lhs:(ppat_tuple ~loc [cons_p; pstring ~loc:s.loc s.txt]) in
           let v = pexp_field ~loc (evar ~loc "_%r") field_l in
           let get' =
             f_case ~guard ~rhs:(apply ~loc (dot ~loc [m; "pack"])
@@ -110,31 +108,33 @@ let process_record_attrs ~conf field ty base_record type_name =
           let put' = f_case ~guard ~rhs:(pexp_record ~loc
             [(field_l, apply_v ~loc (dot ~loc [m; "unmarshal_safe"])
                 (apply ~loc (dot ~loc [m; "unpack"]) [evar ~loc "_%v"]) ty)] base_record) in
-          let fd = pexp_tuple ~loc [cons_e; a] in
+          let fd = pexp_tuple ~loc [cons_e; estring ~loc:s.loc s.txt] in
           (cons ~loc fd fds, get, put'::put, attrs) in
-        let acc = match l with
-          | [] -> process_payload ~conf (Pconst_string (field.txt, field.loc, None)) field.loc
-          | [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_constant fld; pexp_loc; _ }, _); _ }] ->
-              process_payload ~conf fld pexp_loc
-          | [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_sequence ({ pexp_desc = Pexp_constant fld;
-                                                                     pexp_loc; _ }, e); _ }, _); _ }
-            ] -> begin
-              let loc = e.pexp_loc in
-              match C.parse conf C.field_encoder_mask
-                            { hd with attr_payload = PStr [pstr_eval ~loc e []] } with
-              | Ok conf -> process_payload ~conf fld pexp_loc
-              | Error e -> (pexp_extension ~loc e, [], [], [])
+        let acc = match (l, conf.tag_name) with
+          | [], None ->
+              process_payload ~conf field
+          | [], Some s ->
+              process_payload ~conf s
+          | [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_constant (Pconst_string (txt, loc, _));
+                                         _ }, _); _ }], _ ->
+              process_payload ~conf { txt; loc }
+          | [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_sequence ({ pexp_desc = Pexp_constant
+                 (Pconst_string (txt, loc, _)); _ }, e); _ }, _); _ }], _ -> begin
+              match C.parse conf C.{ field_encoder_mask with m_tag_name = Disallowed }
+                            { hd with attr_payload = PStr [pstr_eval ~loc:e.pexp_loc e []] } with
+              | Ok conf -> process_payload ~conf { txt; loc }
+              | Error err -> (pexp_extension ~loc:e.pexp_loc err, [], [], [])
             end
-          | [{ pstr_desc = Pstr_eval _; _ }] -> begin
+          | [{ pstr_desc = Pstr_eval _; _ }], _ -> begin
               match C.parse conf C.field_encoder_mask hd with
-              | Ok conf -> process_payload ~conf (Pconst_string (field.txt, field.loc, None))
-                                           field.loc
+              | Ok conf ->
+                  Option.value ~default:field conf.tag_name |> process_payload ~conf
               | Error e -> (pexp_extension ~loc e, [], [], [])
             end
-          | _ when conf.safe ->
+          | _, _ when conf.safe ->
               let msg = "does not know how to parse this attribute" in
               (cons ~loc (eerr_ma ~loc msg) fds, get, put, attrs)
-          | _ ->
+          | _, _ ->
               let msg = "is ignoring this attribute because it is not in any recognized form. \
                          Consider using [@@marshal.safe] when interacting with other preprocessor \
                          extensions." in

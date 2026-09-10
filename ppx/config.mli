@@ -2,14 +2,15 @@
 
 (** The type of Gendarme configurations *)
 type t = { default : Ppxlib.Parsetree.expression option; disallow_unknown_fields : bool;
-           omit_default : bool; safe : bool; tag : string Ppxlib.Loc.t list }
+           omit_default : bool; safe : bool; tag : string Ppxlib.Loc.t list;
+           tag_name : string Ppxlib.Loc.t option }
 
 (** The type of masking policies *)
 type policy = Allowed | Disallowed | Seen
 
 (** The type of Gendarme configuration masks *)
 type mask = { m_default: policy; m_disallow_unknown_fields : policy; m_omit_default : policy;
-              m_safe : policy; m_tag : policy }
+              m_safe : policy; m_tag : policy; m_tag_name : policy }
 
 (** The default configuration *)
 val default : t

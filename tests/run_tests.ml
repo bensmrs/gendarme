@@ -819,6 +819,37 @@ let test_tag () =
   check bool "t2 y<" true M.([%decode.Yaml] ~v:"t2_bar: foo" t2 = v2');
   check string "t2 y>" "t2_bar: foo\n" M.([%encode.Yaml] ~v:v2 t2)
 
+(** Test automatic tag naming feature *)
+let test_tag_name () =
+  let module Gendarme_json = Gendarme_yojson in
+  let module M = struct
+    include Gendarme_json.Prelude
+    type t1 = { t1_foo: int [@json] [@yaml] [@tag_name "foo"]; t1_bar: string [@json "bar"] }
+              [@@marshal]
+    let v1 = { t1_foo = 42; t1_bar = "foo" }
+    let v1' = { t1_foo = 42; t1_bar = "" }
+    type t2 = { t2_foo: int [@tag json; yaml] [@tag_name "foo"];
+                t2_bar: string [@json { tag_name = "bar" }] } [@@marshal]
+    let v2 = { t2_foo = 42; t2_bar = "foo" }
+    let v2' = { t2_foo = 42; t2_bar = "" }
+    type t3 = { t3_foo: int [@json "xxx"] [@yaml] [@tag_name "foo"]; t3_bar: string [@json "bar"] }
+              [@@marshal]
+    let v3 = { t3_foo = 42; t3_bar = "foo" }
+    let v3' = { t3_foo = 42; t3_bar = "" }
+  end in
+  check bool "t1 j<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t1 = v1);
+  check string "t1 j>" "{\"foo\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v1 t1);
+  check bool "t1 y<" true M.([%decode.Yaml] ~v:"foo: 42" t1 = v1');
+  check string "t1 y>" "foo: 42\n" M.([%encode.Yaml] ~v:v1 t1);
+  check bool "t2 j<" true M.([%decode.Json] ~v:"{\"foo\":42,\"bar\":\"foo\"}" t2 = v2);
+  check string "t2 j>" "{\"foo\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v2 t2);
+  check bool "t2 y<" true M.([%decode.Yaml] ~v:"foo: 42" t2 = v2');
+  check string "t2 y>" "foo: 42\n" M.([%encode.Yaml] ~v:v2 t2);
+  check bool "t3 j<" true M.([%decode.Json] ~v:"{\"xxx\":42,\"bar\":\"foo\"}" t3 = v3);
+  check string "t3 j>" "{\"xxx\":42,\"bar\":\"foo\"}" M.([%encode.Json] ~v:v3 t3);
+  check bool "t3 y<" true M.([%decode.Yaml] ~v:"foo: 42" t3 = v3');
+  check string "t3 y>" "foo: 42\n" M.([%encode.Yaml] ~v:v3 t3)
+
 (** Transcoding tests between JSON and YAML *)
 let test_transcode_json_yaml () =
   let module Gendarme_json = Gendarme_yojson in
@@ -908,6 +939,7 @@ let () =
       ("test_safe_mode", `Quick, test_safe_mode);
       ("test_omit_default", `Quick, test_omit_default);
       ("test_tag", `Quick, test_tag);
+      ("test_tag_name", `Quick, test_tag_name);
     ]);
     ("misc", [
       ("test_transcode_json_yaml", `Quick, test_transcode_json_yaml);

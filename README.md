@@ -224,11 +224,13 @@ Record fields support the following options:
 * `default`, to set a default value in case none is provided when unmarshalling, and to tune `omit_default`’s behavior;
 * `omit_default`, to override any `omit_default` settings for a particular field;
 * `safe`, to override any `safe` settings for a particular field;
-* `tag`, to override any `tag` settings for a particular field.
+* `tag`, to override any `tag` settings for a particular field;
+* `tag_name`, to set a different tag name when marshalling.
 
-Individual record’s encoder annotations support the following option:
+Individual record’s encoder annotations support the following options:
 
-* `omit_default`, to override any `omit_default` settings for a particular encoder in a particular field.
+* `omit_default`, to override any `omit_default` settings for a particular encoder in a particular field;
+* `tag_name`, to override any `tag_name` settings for a particular encoder (this is equivalent to, and mutually exclusive with, providing a field name directly to the encoder annotation).
 
 ### Using Gendarme options
 
