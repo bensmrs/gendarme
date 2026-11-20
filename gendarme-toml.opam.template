@@ -1,0 +1,5 @@
+depends: [
+  ( "gendarme-otoml" {= version} | "gendarme-to-ml" {= version} )
+]
+build: []
+install: []

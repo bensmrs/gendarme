@@ -70,7 +70,8 @@ For now, `Gendarme` can encode data in the following formats:
 | CSV | [OCaml CSV](https://opam.ocaml.org/packages/csv/) | `Csv.t` | This is a functorial encoder, supposed to be used in combination with a modular encoder for complex types (*e.g.* tuples of records). A sane choice is to combine it with JSON.
 | JSON | [Ezjsonm](https://opam.ocaml.org/packages/ezjsonm/) | `Ezjsonm.value`
 || [Yojson](https://opam.ocaml.org/packages/yojson/) | `Yojson.Safe.t` |
-| TOML | [toml](https://opam.ocaml.org/packages/toml/) | `Toml.Types.value` | Limited support due to problems within the Toml library. Non-record values are wrapped to conform to TOML.
+| TOML | [OTOML](https://opam.ocaml.org/packages/otoml/) | `Otoml.t` | Non-record values are wrapped to conform to TOML.
+|| [toml](https://opam.ocaml.org/packages/toml/) | `Toml.Types.value` | Limited support due to problems within the `toml` library. Non-record values are wrapped to conform to TOML.
 | YAML | [Yaml](https://opam.ocaml.org/packages/yaml/) | `Yaml.value` |
 
 ## Usage

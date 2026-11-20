@@ -1,0 +1,6 @@
+(library
+ (name gendarme_otoml)
+ (public_name gendarme-otoml)
+ (wrapped false)
+ (libraries gendarme otoml)
+ (preprocess (pps ppx_marshal_ext)))

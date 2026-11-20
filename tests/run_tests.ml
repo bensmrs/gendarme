@@ -2,19 +2,22 @@
 
 open Alcotest
 
-(** To be extra safe, we completely shadow Gendarme_json *)
-module Gendarme_json = struct end
-
 (** For instrumentation purposes, we alias Yojson for the CSV encoder *)
 module Gendarme_csv__json = Gendarme_csv__yojson
 
-(** Because different implementations exist for JSON encoders, we handle them in a special way by
+(** Because different implementations exist for some encoders, we handle them in a special way by
     abusing the type system. We need to do it here, else the extensible variant cannot be properly
     unified. *)
 module type JSON = sig include Gendarme.S module Prelude : sig type Gendarme.encoder += Json end end
+module type TOML = sig include Gendarme.S module Prelude : sig type Gendarme.encoder += Toml end end
 
 (** JSON implementations *)
 let json = [("Ezjsonm", (module Gendarme_ezjsonm : JSON)); ("Yojson", (module Gendarme_yojson))]
+
+(** TOML implementations *)
+let toml_otoml = (module Gendarme_otoml : TOML)
+let toml_toml = (module Gendarme_to_ml : TOML)
+let toml = [("OTOML", toml_otoml); ("toml", toml_toml)]
 
 (** These compile-time checks allow for easier debugging *)
 module _ = struct
@@ -161,12 +164,12 @@ let test_simple_types_json (module Gendarme_json : JSON) () =
   |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** A few simple tests with TOML *)
-let test_simple_types_toml () =
+let test_simple_types_toml ((module Gendarme_toml : TOML) as m) () =
   check string "int>" "__value = 42\n" ([%encode.Toml] ~v:42 Gendarme.int);
   check string "string>" "__value = \"42\"\n" ([%encode.Toml] ~v:"42" Gendarme.string);
   check string "bool>" "__value = true\n" ([%encode.Toml] ~v:true Gendarme.bool);
-  [%encode.Toml] ~v:[1.2; 3.4] Gendarme.(list float)
-  |> check string "float list>" "__value = [1.2, 3.4]\n";
+  let v = if m == toml_toml then "__value = [1.2, 3.4]\n" else "__value = [1.20, 3.40]\n" in
+  [%encode.Toml] ~v:[1.2; 3.4] Gendarme.(list float) |> check string "float list>" v;
   [%decode.Toml] ~v:"__value=[1,2,3,4]" Gendarme.(list int)
   |> check (list int) "int list<" [1; 2; 3; 4];
   check string "empty list 1>" "__value = []\n" ([%encode.Toml] ~v:[] Gendarme.(list int));
@@ -182,14 +185,17 @@ let test_simple_types_toml () =
   |> check (option int) "int option 1<" (Some 42);
   check (option int) "int option 2<" None ([%decode.Toml] ~v:"__value=[]" Gendarme.(option int));
   (* The tuple tests are unfortunately subject to the TOML module’s limitations *)
+  let v = if m == toml_toml then "__value = [[1], [\"b\"], [3]]\n"
+                            else "__value = [1, \"b\", 3]\n" in
   [%encode.Toml] ~v:(1, "b", 3) Gendarme.(triple int string int)
-  |> check string "int * string * int>" "__value = [[1], [\"b\"], [3]]\n";
-  [%decode.Toml] ~v:"__value = [[1],[\"b\"],[3]]" Gendarme.(triple int string int)
+  |> check string "int * string * int>" v;
+  [%decode.Toml] ~v Gendarme.(triple int string int)
   |> check (triple int string int) "int * string * int<" (1, "b", 3);
+  let v = if m == toml_toml then "__value = [[[42], [\"foo\"]], [[123], [\"bar\"]]]\n"
+                            else "__value = [[42, \"foo\"], [123, \"bar\"]]\n" in
   [%encode.Toml] ~v:[(42, "foo"); (123, "bar")] Gendarme.(pair int string |> list)
-  |> check string "(int * string) list 1>" "__value = [[[42], [\"foo\"]], [[123], [\"bar\"]]]\n";
-  Gendarme.(pair int string |> list)
-  |> [%decode.Toml] ~v:"__value = [[[42],[\"foo\"]],[[123],[\"bar\"]]]"
+  |> check string "(int * string) list 1>" v;
+  [%decode.Toml] ~v Gendarme.(pair int string |> list)
   |> check (pair int string |> list) "(int * string) list 1<" [(42, "foo"); (123, "bar")];
   [%encode.Toml] ~v:[] Gendarme.(pair int string |> list)
   |> check string "(int * string) list 2>" "__value = []\n";
@@ -227,8 +233,9 @@ let test_simple_types_yaml () =
   |> check (pair int string |> list) "(int * string) list 2<" []
 
 (** This module defines interesting cases to check record marshalling *)
-module M1' (Gendarme_json : JSON) = struct
+module M1' (Gendarme_json : JSON) (Gendarme_toml : TOML) = struct
   include Gendarme_json.Prelude
+  include Gendarme_toml.Prelude
   type t1 = { t1_foo: int [@csv "xxx"] [@csv.json "foo"] [@csv.yaml "bar"] [@json "foo"]
                           [@yaml "foo"] [@toml "foo"] } [@@marshal]
   let v1 = { t1_foo = 42 }
@@ -250,7 +257,7 @@ module M1' (Gendarme_json : JSON) = struct
   let v5' = { t5_foo = 123; t5_bar = (3, "baz") }
 end
 
-module M1 = M1' (Gendarme_yojson)
+module M1 = M1' (Gendarme_yojson) (Gendarme_otoml)
 
 (** A few record tests with CSV<> *)
 let test_records_csv () =
@@ -283,7 +290,7 @@ let test_records_csv_json () =
 
 (** A few record tests with JSON *)
 let test_records_json (module Gendarme_json : JSON) () =
-  let module M1 = M1' (Gendarme_json) in
+  let module M1 = M1' (Gendarme_json) (Gendarme_otoml) in
   check string "t1>" "{\"foo\":42}" M1.([%encode.Json] ~v:v1 t1);
   check string "t2>" "{\"foo\":42}" M1.([%encode.Json] ~v:v2 t2);
   check string "t3>" "{\"foo\":42,\"bar\":1.1}" M1.([%encode.Json] ~v:v3 t3);
@@ -299,17 +306,27 @@ let test_records_json (module Gendarme_json : JSON) () =
   check bool "t5l0<" true M1.([%decode.Json] ~v:"[]" (Gendarme.list t5) = [])
 
 (** A few record tests with TOML *)
-let test_records_toml () =
+let test_records_toml ((module Gendarme_toml : TOML) as m) () =
+  let module M1 = M1' (Gendarme_yojson) (Gendarme_toml) in
   check string "t1>" "foo = 42\n" M1.([%encode.Toml] ~v:v1 t1);
   check string "t2>" "baz = \"foo\"\n" M1.([%encode.Toml] ~v:v2 t2);
-  check string "t3>" "bar = 1.1\nfoo = 42\n" M1.([%encode.Toml] ~v:v3 t3);
+  let v = if m == toml_toml then "bar = 1.1\nfoo = 42\n" else "foo = 42\nbar = 1.10\n" in
+  check string "t3>" v M1.([%encode.Toml] ~v:v3 t3);
   check bool "t3<" true M1.([%decode.Toml] ~v:"foo=42\nbar=1.1" t3 = v3);
-  check string "t4>" "foo = 42\n[bar]\nfoo = 42\n" M1.([%encode.Toml] ~v:v4 t4);
+  let v = if m == toml_toml then "foo = 42\n[bar]\nfoo = 42\n"
+                            else "foo = 42\n\n[bar]\nfoo = 42\n" in
+  check string "t4>" v M1.([%encode.Toml] ~v:v4 t4);
   check bool "t4<" true M1.([%decode.Toml] ~v:"foo=42\n[bar]\nfoo=42" t4 = v4);
-  check string "t5>" "bar = [[1], [\"bar\"]]\nfoo = 42\n" M1.([%encode.Toml] ~v:v5 t5);
-  check bool "t5<" true M1.([%decode.Toml] ~v:"bar=[[1],[\"bar\"]]\nfoo=42" t5 = v5);
-  let toml = "[[__value]]\nbar = [[1], [\"bar\"]]\nfoo = 42\n\
-              [[__value]]\nbar = [[3], [\"baz\"]]\nfoo = 123\n" in
+  let v = if m == toml_toml then "bar = [[1], [\"bar\"]]\nfoo = 42\n"
+                            else "foo = 42\nbar = [1, \"bar\"]\n" in
+  check string "t5>" v M1.([%encode.Toml] ~v:v5 t5);
+  check bool "t5<" true M1.([%decode.Toml] ~v t5 = v5);
+  let toml =
+    if m == toml_toml
+    then "[[__value]]\nbar = [[1], [\"bar\"]]\nfoo = 42\n\
+          [[__value]]\nbar = [[3], [\"baz\"]]\nfoo = 123\n"
+    else "\n[[__value]]\nfoo = 42\nbar = [1, \"bar\"]\n\n\
+            [[__value]]\nfoo = 123\nbar = [3, \"baz\"]\n" in
   check string "t5l>" toml M1.([%encode.Toml] ~v:[v5; v5'] (Gendarme.list t5));
   check bool "t5l<" true M1.([%decode.Toml] ~v:toml (Gendarme.list t5) = [v5; v5']);
   check string "t5l0>" "__value = []\n" M1.([%encode.Toml] ~v:[] (Gendarme.list t5));
@@ -332,9 +349,10 @@ let test_records_yaml () =
   check bool "t5l0<" true M1.([%decode.Yaml] ~v:"[]" (Gendarme.list t5) = [])
 
 (** This module defines interesting cases to check variant marshalling *)
-module M2' (Gendarme_json : JSON) = struct
+module M2' (Gendarme_json : JSON) (Gendarme_toml : TOML) = struct
   include Gendarme_json.Prelude
-  module M1 = M1' (Gendarme_json)
+  include Gendarme_toml.Prelude
+  module M1 = M1' (Gendarme_json) (Gendarme_toml)
   type t1 = Foo1 | Bar1 [@@marshal]
   let v1 = Foo1
   let v1' = Bar1
@@ -352,7 +370,7 @@ module M2' (Gendarme_json : JSON) = struct
   let v5' = Bar5 { t3_foo = 2; t3_bar = 3.1 }
 end
 
-module M2 = M2' (Gendarme_yojson)
+module M2 = M2' (Gendarme_yojson) (Gendarme_otoml)
 
 (** A few variant tests with CSV<> *)
 let test_variants_csv () =
@@ -400,7 +418,7 @@ let test_variants_csv_json () =
 
 (** A few variant tests with JSON *)
 let test_variants_json (module Gendarme_json : JSON) () =
-  let module M2 = M2' (Gendarme_json) in
+  let module M2 = M2' (Gendarme_json) (Gendarme_otoml) in
   check string "t1 1>" "\"Foo1\"" M2.([%encode.Json] ~v:v1 t1);
   check string "t1 2>" "\"Bar1\"" M2.([%encode.Json] ~v:v1' t1);
   check bool "t1 1<" true M2.([%decode.Json] ~v:"\"Foo1\"" t1 = v1);
@@ -424,25 +442,43 @@ let test_variants_json (module Gendarme_json : JSON) () =
   check bool "t5 2<" true M2.([%decode.Json] ~v:"[\"Bar5\",{\"foo\":2,\"bar\":3.1}]" t5 = v5')
 
 (** A few variant tests with TOML *)
-let test_variants_toml () =
+let test_variants_toml ((module Gendarme_toml : TOML) as m) () =
+  let module M2 = M2' (Gendarme_yojson) (Gendarme_toml) in
   check string "t1 1>" "__value = \"Foo1\"\n" M2.([%encode.Toml] ~v:v1 t1);
   check string "t1 2>" "__value = \"Bar1\"\n" M2.([%encode.Toml] ~v:v1' t1);
   check bool "t1 1<" true M2.([%decode.Toml] ~v:"__value=\"Foo1\"" t1 = v1);
   check bool "t1 2<" true M2.([%decode.Toml] ~v:"__value=\"Bar1\"" t1 = v1');
   check string "t2 1>" "__value = \"Foo2\"\n" M2.([%encode.Toml] ~v:v2 t2);
-  check string "t2 2>" "__value = [[\"Bar2\"], [42], [\"bar\"]]\n" M2.([%encode.Toml] ~v:v2' t2);
+  let v = if m == toml_toml then "__value = [[\"Bar2\"], [42], [\"bar\"]]\n"
+                            else "__value = [\"Bar2\", 42, \"bar\"]\n" in
+  check string "t2 2>" v M2.([%encode.Toml] ~v:v2' t2);
   check bool "t2 1<" true M2.([%decode.Toml] ~v:"__value=\"Foo2\"" t2 = v2);
-  check bool "t2 2<" true M2.([%decode.Toml] ~v:"__value=[[\"Bar2\"],[42],[\"bar\"]]" t2 = v2');
-  M2.([%encode.Toml] ~v:v3 t3)
-  |> check string "t3 1>" "__value = [[\"Foo3\"], [[[[\"Foo3\"], [[]]]]]]\n";
-  M2.([%decode.Toml] ~v:"__value = [[\"Foo3\"],[[[[\"Foo3\"],[[]]]]]]" t3 = v3)
-  |> check bool "t3 1<" true;
+  check bool "t2 2<" true M2.([%decode.Toml] ~v t2 = v2');
+  let v = if m == toml_toml then "__value = [[\"Foo3\"], [[[[\"Foo3\"], [[]]]]]]\n"
+                            else "__value = [\"Foo3\", [[\"Foo3\", []]]]\n" in
+  check string "t3 1>" v M2.([%encode.Toml] ~v:v3 t3);
+  check bool "t3 1<" true M2.([%decode.Toml] ~v t3 = v3);
   (* An implementation bug in the Toml library prevents us to perform the [t3 2] tests *)
-  check string "t4 1>" "foo4 = \"Foo2\"\n" M2.([%encode.Toml] ~v:v4 t4);
-  check string "t4 2>" "foo4 = [[\"Bar2\"], [2], [\"foo\"]]\n" M2.([%encode.Toml] ~v:v4' t4);
+  if m != toml_toml then begin
+    let v = "__value = [\"Bar3\", {foo = 42, bar = [12, \"foo\"]}]\n" in
+    check string "t3 2>" v M2.([%encode.Toml] ~v:v3' t3);
+    check bool "t3 2<" true M2.([%decode.Toml] ~v t3 = v3')
+  end;
+  let v = if m == toml_otoml then "\"foo4\" = \"Foo2\"\n" else "foo4 = \"Foo2\"\n" in
+  check string "t4 1>" v M2.([%encode.Toml] ~v:v4 t4);
+  let v = if m == toml_toml then "foo4 = [[\"Bar2\"], [2], [\"foo\"]]\n"
+                            else "\"foo4\" = [\"Bar2\", 2, \"foo\"]\n" in
+  check string "t4 2>" v M2.([%encode.Toml] ~v:v4' t4);
   check bool "t4 1<" true M2.([%decode.Toml] ~v:"foo4=\"Foo2\"" t4 = v4);
-  check bool "t4 2<" true M2.([%decode.Toml] ~v:"foo4=[[\"Bar2\"],[2],[\"foo\"]]" t4 = v4')
+  check bool "t4 2<" true M2.([%decode.Toml] ~v t4 = v4');
   (* An implementation bug in the Toml library prevents us to perform the [t5] tests *)
+  if m != toml_toml then begin
+    check string "t5 1>" "__value = [\"Foo5\", {foo = 1}]\n" M2.([%encode.Toml] ~v:v5 t5);
+    M2.([%encode.Toml] ~v:v5' t5)
+    |> check string "t5 2>" "__value = [\"Bar5\", {foo = 2, bar = 3.10}]\n";
+    check bool "t5 1<" true M2.([%decode.Toml] ~v:"__value=[\"Foo5\",{foo=1}]" t5 = v5);
+    check bool "t5 2<" true M2.([%decode.Toml] ~v:"__value=[\"Bar5\",{foo=2,bar=3.1}]" t5 = v5')
+  end
 
 (** A few variant tests with YAML *)
 let test_variants_yaml () =
@@ -551,7 +587,7 @@ let test_proxies_json (module Gendarme_json : JSON) () =
   check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
 
 (** A few proxy tests with TOML *)
-let test_proxies_toml () =
+let test_proxies_toml ((module Gendarme_toml : TOML) as m) () =
   check string "t1>" "__value = [1, 2, 3, 4, 5]\n" M3.([%encode.Toml] ~v:v1 t1);
   check bool "t1<" true M3.([%decode.Toml] ~v:"__value=[1,2,3,4,5]" t1 |> seq_eq v1);
   (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
@@ -562,8 +598,17 @@ let test_proxies_toml () =
   check bool "t2<" true (seq_eq s M3.s2 || seq_eq s M3.s2');
   let toml = "\"1.1\" = 42\n\"2.5\" = 12\n" in
   let toml' = "\"2.5\" = 12\n\"1.1\" = 42\n" in
-  check bool "t3>" true M3.(let s = [%encode.Toml] ~v:v3 t3 in s = toml || s = toml')
+  check bool "t3>" true M3.(let s = [%encode.Toml] ~v:v3 t3 in s = toml || s = toml');
   (* An implementation bug in the Toml library prevents us to perform the [t3<] and [t4] tests *)
+  if m != toml_toml then begin
+    let s = M3.([%decode.Toml] ~v:toml t3 |> Hashtbl.to_seq) in
+    check bool "t3<" true (seq_eq s M3.s3 || seq_eq s M3.s3');
+    let toml = "__value = [[[1, 2], 3], [[4, 5], 6]]\n" in
+    let toml' = "__value = [[[4, 5], 6], [[1, 2], 3]]\n" in
+    check bool "t4>" true M3.(let s = [%encode.Toml] ~v:v4 t4 in s = toml || s = toml');
+    let s = M3.([%decode.Toml] ~v:toml t4 |> Hashtbl.to_seq) in
+    check bool "t4<" true (seq_eq s M3.s4 || seq_eq s M3.s4')
+  end
 
 (** A few proxy tests with YAML *)
 let test_proxies_yaml () =
@@ -649,15 +694,21 @@ let test_wrappers_json (module Gendarme_json : JSON) () =
   check bool "M3.t<" true M4.([%decode.Json] ~v:"[1,2,3,5,8]" M3.t |> M3.equal v3)
 
 (** A few wrapper tests with TOML *)
-let test_wrappers_toml () =
-  let toml = "1 = 2\n3 = 5\n" in
+let test_wrappers_toml ((module Gendarme_toml : TOML) as m) () =
+  let toml = if m == toml_otoml then "\"1\" = 2\n\"3\" = 5\n" else "1 = 2\n3 = 5\n" in
   check string "M1.t>" toml M4.(M1.t Gendarme.int |> [%encode.Toml] ~v:v1);
   (* An implementation bug in the Toml library prevents us to perform the [M1.t<] test *)
+  if m != toml_toml then
+    M4.(M1.t Gendarme.int |> [%decode.Toml] ~v:toml |> M1.to_seq |> seq_eq s)
+    |> check bool "M1.t<" true;
   (* The Hashtbl iteration order is unspecified, so we check the two combinations *)
   let toml' = "3 = 5\n1 = 2\n" in
   let s = M4.(M2.t Gendarme.int |> [%encode.Toml] ~v:v2) in
   check bool "M2.t>" true (s = toml || s = toml');
   (* An implementation bug in the Toml library prevents us to perform the [M2.t<] test *)
+  if m != toml_toml then
+    let s = M4.(M2.t Gendarme.int |> [%decode.Toml] ~v:toml |> M2.to_seq) in
+    check bool "M2.t<" true (seq_eq s M4.s || seq_eq s M4.s');
   check string "M3.t>" "__value = [1, 2, 3, 5, 8]\n" M4.([%encode.Toml] ~v:v3 M3.t);
   check bool "M3.t<" true M4.([%decode.Toml] ~v:"__value=[1,2,3,5,8]" M3.t |> M3.equal v3)
 
@@ -930,32 +981,32 @@ let () =
       ("test_simple_types_csv_json", `Quick, test_simple_types_csv_json)::
       ("test_simple_types_csv_yaml", `Quick, test_simple_types_csv_yaml)::
       modularize ("test_simple_types_json", `Quick, test_simple_types_json) json @
-      [("test_simple_types_toml", `Quick, test_simple_types_toml);
-       ("test_simple_types_yaml", `Quick, test_simple_types_yaml)]);
+      modularize ("test_simple_types_toml", `Quick, test_simple_types_toml) toml @
+      [("test_simple_types_yaml", `Quick, test_simple_types_yaml)]);
     ("records",
       ("test_records_csv", `Quick, test_records_csv)::
       ("test_records_csv_json", `Quick, test_records_csv_json)::
       modularize ("test_records_json", `Quick, test_records_json) json @
-      [("test_records_toml", `Quick, test_records_toml);
-       ("test_records_yaml", `Quick, test_records_yaml)]);
+      modularize ("test_records_toml", `Quick, test_records_toml) toml @
+      [("test_records_yaml", `Quick, test_records_yaml)]);
     ("variants",
       ("test_variants_csv", `Quick, test_variants_csv)::
       ("test_variants_csv_json", `Quick, test_variants_csv_json)::
       modularize ("test_variants_json", `Quick, test_variants_json) json @
-      [("test_variants_toml", `Quick, test_variants_toml);
-       ("test_variants_yaml", `Quick, test_variants_yaml)]);
+      modularize ("test_variants_toml", `Quick, test_variants_toml) toml @
+      [("test_variants_yaml", `Quick, test_variants_yaml)]);
     ("proxies",
       ("test_proxies_csv", `Quick, test_proxies_csv)::
       ("test_proxies_csv_json", `Quick, test_proxies_csv_json)::
       modularize ("test_proxies_json", `Quick, test_proxies_json) json @
-      [("test_proxies_toml", `Quick, test_proxies_toml);
-       ("test_proxies_yaml", `Quick, test_proxies_yaml)]);
+      modularize ("test_proxies_toml", `Quick, test_proxies_toml) toml @
+      [("test_proxies_yaml", `Quick, test_proxies_yaml)]);
     ("wrappers",
       ("test_wrappers_csv", `Quick, test_wrappers_csv)::
       ("test_wrappers_csv_json", `Quick, test_wrappers_csv_json)::
       modularize ("test_wrappers_json", `Quick, test_wrappers_json) json @
-      [("test_wrappers_toml", `Quick, test_wrappers_toml);
-       ("test_wrappers_yaml", `Quick, test_wrappers_yaml)]);
+      modularize ("test_wrappers_toml", `Quick, test_wrappers_toml) toml @
+      [("test_wrappers_yaml", `Quick, test_wrappers_yaml)]);
     ("features", [
       ("test_no_field_name", `Quick, test_no_field_name);
       ("test_default_values", `Quick, test_default_values);

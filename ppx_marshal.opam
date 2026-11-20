@@ -15,7 +15,8 @@ depends: [
   "gendarme" {= version}
   "gendarme-csv" {= version & with-test}
   "gendarme-ezjsonm" {= version & with-test}
-  "gendarme-toml" {= version & with-test}
+  "gendarme-otoml" {= version & with-test}
+  "gendarme-to-ml" {= version & with-test}
   "gendarme-yaml" {= version & with-test}
   "gendarme-yojson" {= version & with-test}
   "ocaml" {>= "4.13.0"}

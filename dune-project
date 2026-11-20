@@ -42,13 +42,29 @@
  (maintenance_intent "(latest)"))
 
 (package
- (name gendarme-toml)
- (synopsis "Libraries to marshal OCaml data structures (TOML)")
- (description "This package allows to marshal OCaml data structures to TOML")
+ (name gendarme-otoml)
+ (synopsis "Libraries to marshal OCaml data structures (TOML [OTOML])")
+ (description "This package allows to marshal OCaml data structures to TOML using OTOML")
+ (maintenance_intent "(latest)")
+ (depends
+  (ppx_marshal_ext (= :version))
+  (otoml (>= 0.9.2))))
+
+(package
+ (name gendarme-to-ml)
+ (synopsis "Libraries to marshal OCaml data structures (TOML [toml])")
+ (description "This package allows to marshal OCaml data structures to TOML using toml")
  (maintenance_intent "(latest)")
  (depends
   (ppx_marshal_ext (= :version))
   (toml (>= 7.1.0))))
+
+(package
+ (name gendarme-toml)
+ (synopsis "Libraries to marshal OCaml data structures (TOML metapackage)")
+ (description "Metapackage for TOML marshalling using Gendarme")
+ (allow_empty)
+ (maintenance_intent "(latest)"))
 
 (package
  (name gendarme-yaml)
@@ -78,7 +94,8 @@
   (gendarme (= :version))
   (gendarme-csv (and (= :version) :with-test))
   (gendarme-ezjsonm (and (= :version) :with-test))
-  (gendarme-toml (and (= :version) :with-test))
+  (gendarme-otoml (and (= :version) :with-test))
+  (gendarme-to-ml (and (= :version) :with-test))
   (gendarme-yaml (and (= :version) :with-test))
   (gendarme-yojson (and (= :version) :with-test))
   (ocaml (>= 4.13.0))
